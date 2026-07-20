@@ -30,6 +30,7 @@
 #include "bsp_encoder.h"
 #include "input.h"
 #include "event.h"
+#include "bsp_lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,6 +104,7 @@ int main(void)
   BSP_LED_Init();
   EVENT_Init();
   INPUT_Init();
+  BSP_LCD_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -111,7 +113,9 @@ int main(void)
   while (1)
   {
       INPUT_Update();
+      BSP_LCD_WriteCommand(0xAA);
 
+      BSP_LCD_WriteData(0x55);
       while(EVENT_Get(&msg))
       {
           switch(msg.Id)
