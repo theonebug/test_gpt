@@ -1,0 +1,23 @@
+# Build
+Debug/
+Release/
+
+# CubeIDE
+.settings/
+
+# Temporary files
+*.o
+*.d
+*.su
+*.map
+*.list
+*.elf
+*.hex
+*.bin
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Backup
+*.bak
