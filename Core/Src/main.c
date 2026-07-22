@@ -37,6 +37,7 @@
 #include "ok_32.h"
 #include "device.h"
 #include "sync.h"
+#include "tiristor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -138,6 +139,8 @@ int main(void)
   {
       INPUT_Update();
       SYNC_Update();
+      Device_Update();
+      Tiristor_Update();
       static uint32_t SyncTimer = 0;
 
           if(HAL_GetTick() - SyncTimer >= 200)
@@ -146,7 +149,7 @@ int main(void)
 
               BSP_LCD_UpdateSync(SYNC_IsPresent());
 
-              BSP_LCD_UpdateAngle((uint16_t)SYNC_GetHalfPeriodUs());
+              BSP_LCD_UpdateAngle(Device_GetAngle());
           }
 
 
@@ -155,11 +158,11 @@ int main(void)
           switch(msg.Id)
           {
               case EVENT_RUN_CLICK:
-                  BSP_LED_Toggle(LED_READY);
+            	  Device_Start();
                   break;
 
               case EVENT_STOP_CLICK:
-                  BSP_LED_Toggle(LED_ALARM);
+            	  Device_Stop();
                   break;
 
               case EVENT_ENCODER_CLICK:

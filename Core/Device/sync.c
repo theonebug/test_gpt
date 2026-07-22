@@ -1,5 +1,6 @@
 #include "sync.h"
 #include "main.h"
+#include "device.h"
 
 extern TIM_HandleTypeDef htim2;
 
@@ -53,6 +54,8 @@ void SYNC_EXTI_Handler(void)
     SyncCounter++;
 
     SyncPresent = 1;
+
+    Device_OnZeroCross();
 }
 
 /*----------------------------------------------------------

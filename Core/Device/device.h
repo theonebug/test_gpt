@@ -4,7 +4,25 @@
 #include <stdint.h>
 
 /*----------------------------------------------------------
-    Device state
+    Device state machine
+----------------------------------------------------------*/
+
+typedef enum
+{
+    DEVICE_READY = 0,
+
+    DEVICE_WAIT_SYNC,
+
+    DEVICE_WAIT_ZERO,
+
+    DEVICE_TEST,
+
+    DEVICE_FINISHED
+
+} DeviceState_t;
+
+/*----------------------------------------------------------
+    Device parameters
 ----------------------------------------------------------*/
 
 typedef struct
@@ -19,15 +37,31 @@ typedef struct
 
     uint8_t Remote;
 
+    DeviceState_t State;
+
 } Device_t;
 
 extern Device_t Device;
+
+void Device_OnZeroCross(void);
 
 /*----------------------------------------------------------
     Initialization
 ----------------------------------------------------------*/
 
 void Device_Init(void);
+
+/*----------------------------------------------------------
+    Main state machine
+----------------------------------------------------------*/
+
+void Device_Start(void);
+
+void Device_Stop(void);
+
+void Device_Update(void);
+
+DeviceState_t Device_GetState(void);
 
 /*----------------------------------------------------------
     Angle
