@@ -35,6 +35,7 @@
 #include "bsp_lcd.h"
 #include "st7789.h"
 #include "ok_32.h"
+#include "device.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,7 +56,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+//static uint16_t Angle = 90;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -109,7 +110,9 @@ int main(void)
   BSP_LED_Init();
   EVENT_Init();
   INPUT_Init();
-  //BSP_LCD_Init();
+  Device_Init();
+  BSP_LCD_UpdateAngle(Device_GetAngle());
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,29 +122,14 @@ int main(void)
 
 
   BSP_LCD_SetScreen(LCD_SCREEN_MAIN);
-
+  BSP_LCD_UpdateAngle(Device.Angle);
   BSP_LCD_UpdateMode(0);
   BSP_LCD_UpdateRS485(1);
   BSP_LCD_UpdateSync(1);
-  BSP_LCD_UpdateAngle(135);
+
   BSP_LCD_UpdateStatus("READY", UI_COLOR_OK);
   BSP_LCD_UpdateDuration(250);
   BSP_LCD_UpdateProgress(75);
-
-  HAL_Delay(1000);
-  BSP_LCD_UpdateAngle(90);
-
-  HAL_Delay(1000);
-  BSP_LCD_UpdateProgress(30);
-
-  HAL_Delay(1000);
-  BSP_LCD_UpdateStatus("ERROR", UI_COLOR_ERROR);
-
-  HAL_Delay(1000);
-  BSP_LCD_UpdateRS485(0);
-
-  HAL_Delay(1000);
-  BSP_LCD_UpdateSync(0);
 
   EventMessage_t msg;
   while (1)
@@ -164,12 +152,18 @@ int main(void)
                   BSP_LED_Toggle(LED_PULSE);
                   break;
 
-              case EVENT_ENCODER_RIGHT:
-                  BSP_LED_Toggle(LED_READY);
+              case EVENT_ENCODER_LEFT:
+            	    if(Device.Angle < 175)
+            	    {
+            	    	Device_SetAngle(Device_GetAngle() + 1);
+            	    }
                   break;
 
-              case EVENT_ENCODER_LEFT:
-                  BSP_LED_Toggle(LED_ALARM);
+              case EVENT_ENCODER_RIGHT:
+            	    if(Device.Angle > 5)
+            	    {
+            	    	Device_SetAngle(Device_GetAngle() - 1);
+            	    }
                   break;
 
               case EVENT_RUN_LONG:
