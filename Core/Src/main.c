@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -30,7 +31,10 @@
 #include "bsp_encoder.h"
 #include "input.h"
 #include "event.h"
-#include "bsp_lcd.h"
+//#include "bsp_lcd.h"
+#include "st7789.h"
+#include "ok_32.h"
+#include "errror_32.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,6 +98,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_SPI2_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -104,18 +109,34 @@ int main(void)
   BSP_LED_Init();
   EVENT_Init();
   INPUT_Init();
-  BSP_LCD_Init();
+  //BSP_LCD_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  ST7789_Init();
+
+  ST7789_Fill_Color_DMA(ST7789_BLACK);
+
+  ST7789_WriteString(
+          10,
+          20,
+          "DISPLAY OK",
+          Font_11x18,
+          ST7789_GREEN,
+          ST7789_BLACK);
+
+  ST7789_DrawImage(
+          10,
+          60,
+          32,
+          32,
+          ok_32);
   EventMessage_t msg;
   while (1)
   {
       INPUT_Update();
-      BSP_LCD_WriteCommand(0xAA);
 
-      BSP_LCD_WriteData(0x55);
       while(EVENT_Get(&msg))
       {
           switch(msg.Id)
@@ -170,7 +191,6 @@ int main(void)
   /* USER CODE END 3 */
 
 
-
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -217,6 +237,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     if (htim->Instance == TIM3)
     {
         BSP_Button_Update();
+        BSP_Encoder_Update();
     }
 }
 /* USER CODE END 4 */

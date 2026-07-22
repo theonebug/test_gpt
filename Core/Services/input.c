@@ -29,7 +29,7 @@ void INPUT_Update(void)
 
     //BSP_Button_Update();
 
-    BSP_Encoder_Update();
+    //BSP_Encoder_Update();
 
     /*----------------------------------------------------------
       RUN
