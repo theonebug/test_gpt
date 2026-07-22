@@ -36,6 +36,7 @@
 #include "st7789.h"
 #include "ok_32.h"
 #include "device.h"
+#include "sync.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,6 +103,7 @@ int main(void)
   MX_DMA_Init();
   MX_SPI2_Init();
   MX_TIM2_Init();
+  HAL_TIM_Base_Start(&htim2);
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_USART2_UART_Init();
@@ -135,6 +137,18 @@ int main(void)
   while (1)
   {
       INPUT_Update();
+      SYNC_Update();
+      static uint32_t SyncTimer = 0;
+
+          if(HAL_GetTick() - SyncTimer >= 200)
+          {
+              SyncTimer = HAL_GetTick();
+
+              BSP_LCD_UpdateSync(SYNC_IsPresent());
+
+              BSP_LCD_UpdateAngle((uint16_t)SYNC_GetHalfPeriodUs());
+          }
+
 
       while(EVENT_Get(&msg))
       {
@@ -244,6 +258,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         BSP_Button_Update();
         BSP_Encoder_Update();
+    }
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == SYNC_IN_Pin)
+    {
+        SYNC_EXTI_Handler();
     }
 }
 /* USER CODE END 4 */
