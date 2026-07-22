@@ -302,9 +302,7 @@ void ST7789_DrawLine(
         int y1,
         uint16_t color);
 
-void ST7789_Test(void);
 
-void ST7789_Color_Test2(void);
 
 
 

@@ -17,6 +17,7 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <error_32.h>
 #include "main.h"
 #include "dma.h"
 #include "spi.h"
@@ -31,10 +32,9 @@
 #include "bsp_encoder.h"
 #include "input.h"
 #include "event.h"
-//#include "bsp_lcd.h"
+#include "bsp_lcd.h"
 #include "st7789.h"
 #include "ok_32.h"
-#include "errror_32.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -114,24 +114,35 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  ST7789_Init();
+  BSP_LCD_Init();
 
-  ST7789_Fill_Color_DMA(ST7789_BLACK);
 
-  ST7789_WriteString(
-          10,
-          20,
-          "DISPLAY OK",
-          Font_11x18,
-          ST7789_GREEN,
-          ST7789_BLACK);
 
-  ST7789_DrawImage(
-          10,
-          60,
-          32,
-          32,
-          ok_32);
+  BSP_LCD_SetScreen(LCD_SCREEN_MAIN);
+
+  BSP_LCD_UpdateMode(0);
+  BSP_LCD_UpdateRS485(1);
+  BSP_LCD_UpdateSync(1);
+  BSP_LCD_UpdateAngle(135);
+  BSP_LCD_UpdateStatus("READY", UI_COLOR_OK);
+  BSP_LCD_UpdateDuration(250);
+  BSP_LCD_UpdateProgress(75);
+
+  HAL_Delay(1000);
+  BSP_LCD_UpdateAngle(90);
+
+  HAL_Delay(1000);
+  BSP_LCD_UpdateProgress(30);
+
+  HAL_Delay(1000);
+  BSP_LCD_UpdateStatus("ERROR", UI_COLOR_ERROR);
+
+  HAL_Delay(1000);
+  BSP_LCD_UpdateRS485(0);
+
+  HAL_Delay(1000);
+  BSP_LCD_UpdateSync(0);
+
   EventMessage_t msg;
   while (1)
   {
@@ -180,9 +191,10 @@ int main(void)
 
               default:
                   break;
-          }   // switch
-      }       // while(EVENT_Get)
-  }           // while(1)
+          }
+      }
+      BSP_LCD_Update();
+  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

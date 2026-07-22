@@ -1,248 +1,554 @@
-/******************************************************************************
- * @file    bsp_lcd.c
- * @brief   BSP LCD Driver
- ******************************************************************************/
-
 #include "bsp_lcd.h"
 
-/*==============================================================================
- * Private Functions
- *============================================================================*/
+#include "st7789.h"
+#include "fonts.h"
 
-/*---------------------------------------------------------------------------
- * Chip Select
- *--------------------------------------------------------------------------*/
-static inline void LCD_Select(void)
+#include "ok_32.h"
+#include "error_32.h"
+
+#include <stdio.h>
+#include <string.h>
+
+/*----------------------------------------------------------
+    LCD state
+----------------------------------------------------------*/
+
+typedef struct
 {
-    HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-}
+    uint16_t Angle;
 
-static inline void LCD_Unselect(void)
-{
-    //HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-}
+    uint8_t SyncOK;
 
-/*---------------------------------------------------------------------------
- * Data / Command
- *--------------------------------------------------------------------------*/
-static inline void LCD_CommandMode(void)
-{
-    HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_RESET);
-}
+    uint8_t RS485OK;
 
-static inline void LCD_DataMode(void)
-{
-    HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET);
-}
+    uint8_t Remote;
 
-/*---------------------------------------------------------------------------
- * Reset
- *--------------------------------------------------------------------------*/
-static inline void LCD_ResetLow(void)
-{
-    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_RESET);
-}
+    uint16_t Duration;
 
-static inline void LCD_ResetHigh(void)
-{
-    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_SET);
-}
+    uint8_t Progress;
 
-/*---------------------------------------------------------------------------
- * SPI transmit
- *--------------------------------------------------------------------------*/
-static void LCD_Send(const uint8_t *data, uint16_t size)
-{
-    HAL_SPI_Transmit(&hspi2, (uint8_t *)data, size, HAL_MAX_DELAY);
-}
+    char Status[20];
 
-/*---------------------------------------------------------------------------
- * Internal functions (without CS switching)
- *--------------------------------------------------------------------------*/
-static void LCD_WriteCommand_NoCS(uint8_t cmd)
-{
-    LCD_CommandMode();
-    LCD_Send(&cmd, 1);
-}
+    uint16_t StatusColor;
 
-static void LCD_WriteData_NoCS(uint8_t data)
-{
-    LCD_DataMode();
-    LCD_Send(&data, 1);
-}
+} LCD_State_t;
 
-static void LCD_WriteBuffer_NoCS(const uint8_t *buffer, uint16_t length)
-{
-    LCD_DataMode();
-    LCD_Send(buffer, length);
-}
+/*----------------------------------------------------------
+    Static variables
+----------------------------------------------------------*/
 
-/*==============================================================================
- * Public Functions
- *============================================================================*/
+static LCD_Screen_t CurrentScreen = LCD_SCREEN_SPLASH;
 
-/******************************************************************************
- * Hardware Reset
- ******************************************************************************/
-void BSP_LCD_Reset(void)
-{
-    LCD_Unselect();
+static LCD_State_t LCD_State;
 
-    LCD_ResetHigh();
-    HAL_Delay(5);
+/*----------------------------------------------------------
+    Private functions
+----------------------------------------------------------*/
 
-    LCD_ResetLow();
-    HAL_Delay(20);
+static void LCD_DrawSplash(void);
+static void LCD_DrawMain(void);
+static void LCD_DrawMenu(void);
+static void LCD_DrawSettings(void);
+static void LCD_DrawService(void);
 
-    LCD_ResetHigh();
-    HAL_Delay(120);
-}
+/*==========================================================
+    BSP_LCD_Init
+==========================================================*/
 
-/******************************************************************************
- * LCD Init
- ******************************************************************************/
-/******************************************************************************
- * LCD Init
- ******************************************************************************/
 void BSP_LCD_Init(void)
 {
-    BSP_LCD_Reset();
+    ST7789_Init();
 
-    LCD_Select();
+    memset(&LCD_State,0xFF,sizeof(LCD_State));
 
-    /*----------------------------------------------------------
-     * Software Reset
-     *---------------------------------------------------------*/
-    LCD_WriteCommand_NoCS(LCD_CMD_SWRESET);
-    HAL_Delay(150);
-
-    /*----------------------------------------------------------
-     * Sleep Out
-     *---------------------------------------------------------*/
-    LCD_WriteCommand_NoCS(LCD_CMD_SLPOUT);
-    HAL_Delay(120);
-
-    /*----------------------------------------------------------
-     * Pixel Format = RGB565
-     *---------------------------------------------------------*/
-    LCD_WriteCommand_NoCS(LCD_CMD_COLMOD);
-    LCD_WriteData_NoCS(0x55);
-
-    HAL_Delay(10);
-
-    /*----------------------------------------------------------
-     * Memory Access Control
-     * MX=0 MY=0 MV=0 RGB
-     *---------------------------------------------------------*/
-    LCD_WriteCommand_NoCS(LCD_CMD_MADCTL);
-    LCD_WriteData_NoCS(0x00);
-
-    /*----------------------------------------------------------
-     * Normal Display Mode
-     *---------------------------------------------------------*/
-    LCD_WriteCommand_NoCS(0x13);
-
-    /*----------------------------------------------------------
-     * Display ON
-     *---------------------------------------------------------*/
-    LCD_WriteCommand_NoCS(LCD_CMD_DISPON);
-    HAL_Delay(20);
-
-    LCD_Unselect();
+    CurrentScreen = LCD_SCREEN_SPLASH;
 }
 
-/******************************************************************************
- * Send Command
- ******************************************************************************/
-void BSP_LCD_WriteCommand(uint8_t cmd)
+/*==========================================================
+    BSP_LCD_Clear
+==========================================================*/
+
+void BSP_LCD_Clear(void)
 {
-    LCD_Select();
-
-    LCD_WriteCommand_NoCS(cmd);
-
-    LCD_Unselect();
+    ST7789_Fill_Color_DMA(
+            UI_COLOR_BACKGROUND);
 }
 
-/******************************************************************************
- * Send one data byte
- ******************************************************************************/
-void BSP_LCD_WriteData(uint8_t data)
+/*==========================================================
+    BSP_LCD_SetScreen
+==========================================================*/
+
+void BSP_LCD_SetScreen(
+        LCD_Screen_t screen)
 {
-    LCD_Select();
-
-    LCD_WriteData_NoCS(data);
-
-    LCD_Unselect();
-}
-
-/******************************************************************************
- * Send data buffer
- ******************************************************************************/
-void BSP_LCD_WriteBuffer(const uint8_t *buffer, uint16_t length)
-{
-    LCD_Select();
-
-    LCD_WriteBuffer_NoCS(buffer, length);
-
-    LCD_Unselect();
-}
-
-/******************************************************************************
- * Set active window
- ******************************************************************************/
-void BSP_LCD_SetWindow(uint16_t x0,
-                       uint16_t y0,
-                       uint16_t x1,
-                       uint16_t y1)
-{
-    uint8_t data[4];
-
-    LCD_Select();
-
-    LCD_WriteCommand_NoCS(LCD_CMD_CASET);
-
-    data[0] = x0 >> 8;
-    data[1] = x0;
-    data[2] = x1 >> 8;
-    data[3] = x1;
-
-    LCD_WriteBuffer_NoCS(data, 4);
-
-    LCD_WriteCommand_NoCS(LCD_CMD_RASET);
-
-    data[0] = y0 >> 8;
-    data[1] = y0;
-    data[2] = y1 >> 8;
-    data[3] = y1;
-
-    LCD_WriteBuffer_NoCS(data, 4);
-
-    LCD_WriteCommand_NoCS(LCD_CMD_RAMWR);
-
-    LCD_Unselect();
-}
-
-/******************************************************************************
- * Fill Screen
- ******************************************************************************/
-void BSP_LCD_FillScreen(uint16_t color)
-{
-    uint32_t i;
-    uint8_t pixel[2];
-
-    pixel[0] = color >> 8;
-    pixel[1] = color;
-
-    BSP_LCD_SetWindow(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
-
-    LCD_Select();
-
-    LCD_DataMode();
-
-    for(i = 0; i < (uint32_t)LCD_WIDTH * LCD_HEIGHT; i++)
+    if(CurrentScreen == screen)
     {
-        LCD_Send(pixel, 2);
+        return;
     }
 
-    LCD_Unselect();
+    CurrentScreen = screen;
+
+    BSP_LCD_Clear();
+
+    switch(CurrentScreen)
+    {
+        case LCD_SCREEN_SPLASH:
+
+            LCD_DrawSplash();
+            break;
+
+        case LCD_SCREEN_MAIN:
+
+            LCD_DrawMain();
+            break;
+
+        case LCD_SCREEN_MENU:
+
+            LCD_DrawMenu();
+            break;
+
+        case LCD_SCREEN_SETTINGS:
+
+            LCD_DrawSettings();
+            break;
+
+        case LCD_SCREEN_SERVICE:
+
+            LCD_DrawService();
+            break;
+
+        default:
+            break;
+    }
 }
+
+/*==========================================================
+    BSP_LCD_GetScreen
+==========================================================*/
+
+LCD_Screen_t BSP_LCD_GetScreen(void)
+{
+    return CurrentScreen;
+}
+
+/*==========================================================
+    BSP_LCD_Update
+==========================================================*/
+
+void BSP_LCD_Update(void)
+{
+
+}
+
+/*==========================================================
+    LCD_DrawSplash
+==========================================================*/
+
+static void LCD_DrawSplash(void)
+{
+    ST7789_WriteString(
+            55,
+            30,
+            "THYRISTOR",
+            Font_11x18,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            45,
+            55,
+            "CONTROLLER",
+            Font_11x18,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_DrawImage(
+            104,
+            90,
+            32,
+            32,
+            ok_32);
+
+    ST7789_WriteString(
+            82,
+            140,
+            "READY",
+            Font_11x18,
+            UI_COLOR_OK,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    LCD_DrawMain
+==========================================================*/
+
+static void LCD_DrawMain(void)
+{
+    /*------------------------------------------------------
+        Background
+    ------------------------------------------------------*/
+
+    BSP_LCD_Clear();
+
+    /*------------------------------------------------------
+        Horizontal lines
+    ------------------------------------------------------*/
+
+    ST7789_DrawLine(0,40,239,40,UI_COLOR_BORDER);
+
+    ST7789_DrawLine(0,80,239,80,UI_COLOR_BORDER);
+
+    ST7789_DrawLine(0,185,239,185,UI_COLOR_BORDER);
+
+    ST7789_DrawLine(0,275,239,275,UI_COLOR_BORDER);
+
+    /*------------------------------------------------------
+        Status rectangle
+    ------------------------------------------------------*/
+
+    ST7789_DrawRectangle(
+            20,
+            195,
+            200,
+            42,
+            UI_COLOR_BORDER);
+
+    /*------------------------------------------------------
+        Static text
+    ------------------------------------------------------*/
+
+    ST7789_WriteString(
+            8,
+            10,
+            "LOCAL",
+            Font_11x18,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            120,
+            10,
+            "RS485:",
+            Font_11x18,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            8,
+            50,
+            "SYNC:",
+            Font_11x18,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            68,
+            150,
+            "DEGREES",
+            Font_11x18,
+            UI_COLOR_LABEL,
+            UI_COLOR_BACKGROUND);
+
+    /*------------------------------------------------------
+        Draw dynamic fields
+    ------------------------------------------------------*/
+
+    BSP_LCD_UpdateMode(LCD_State.Remote);
+
+    BSP_LCD_UpdateRS485(LCD_State.RS485OK);
+
+    BSP_LCD_UpdateSync(LCD_State.SyncOK);
+
+    BSP_LCD_UpdateAngle(LCD_State.Angle);
+
+    BSP_LCD_UpdateStatus(
+            LCD_State.Status,
+            LCD_State.StatusColor);
+
+    BSP_LCD_UpdateDuration(LCD_State.Duration);
+
+    BSP_LCD_UpdateProgress(LCD_State.Progress);
+}
+
+/*==========================================================
+    LCD_DrawMenu
+==========================================================*/
+
+static void LCD_DrawMenu(void)
+{
+    BSP_LCD_Clear();
+
+    ST7789_WriteString(
+            80,
+            20,
+            "MENU",
+            Font_16x26,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    LCD_DrawSettings
+==========================================================*/
+
+static void LCD_DrawSettings(void)
+{
+    BSP_LCD_Clear();
+
+    ST7789_WriteString(
+            45,
+            20,
+            "SETTINGS",
+            Font_16x26,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    LCD_DrawService
+==========================================================*/
+
+static void LCD_DrawService(void)
+{
+    BSP_LCD_Clear();
+
+    ST7789_WriteString(
+            55,
+            20,
+            "SERVICE",
+            Font_16x26,
+            UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateMode
+==========================================================*/
+
+void BSP_LCD_UpdateMode(uint8_t remote)
+{
+    if(LCD_State.Remote == remote)
+    {
+        return;
+    }
+
+    LCD_State.Remote = remote;
+
+    ST7789_FillRectangle(
+            0,
+            0,
+            110,
+            40,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            8,
+            10,
+            remote ? "REMOTE" : "LOCAL",
+            Font_11x18,
+            remote ? UI_COLOR_WARNING : UI_COLOR_TITLE,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateRS485
+==========================================================*/
+
+void BSP_LCD_UpdateRS485(uint8_t ok)
+{
+    if(LCD_State.RS485OK == ok)
+    {
+        return;
+    }
+
+    LCD_State.RS485OK = ok;
+
+    ST7789_FillRectangle(
+            185,
+            4,
+            40,
+            32,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_DrawImage(
+            190,
+            4,
+            32,
+            32,
+            ok ? ok_32 : error_32);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateSync
+==========================================================*/
+
+void BSP_LCD_UpdateSync(uint8_t ok)
+{
+    if(LCD_State.SyncOK == ok)
+    {
+        return;
+    }
+
+    LCD_State.SyncOK = ok;
+
+    ST7789_FillRectangle(
+            70,
+            44,
+            40,
+            32,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_DrawImage(
+            75,
+            44,
+            32,
+            32,
+            ok ? ok_32 : error_32);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateAngle
+==========================================================*/
+
+void BSP_LCD_UpdateAngle(uint16_t angle)
+{
+    char text[8];
+
+    if(LCD_State.Angle == angle)
+    {
+        return;
+    }
+
+    LCD_State.Angle = angle;
+
+    sprintf(text,"%3u",angle);
+
+    ST7789_FillRectangle(
+            45,
+            95,
+            150,
+            48,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            60,
+            100,
+            text,
+            Font_16x26,
+            UI_COLOR_VALUE,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateStatus
+==========================================================*/
+
+void BSP_LCD_UpdateStatus(const char *text,
+                          uint16_t color)
+{
+	if((strcmp(LCD_State.Status, text) == 0) &&
+	   (LCD_State.StatusColor == color))
+	{
+	    return;
+	}
+	strncpy(LCD_State.Status,
+	        text,
+	        sizeof(LCD_State.Status)-1);
+
+	LCD_State.Status[sizeof(LCD_State.Status)-1] = '\0';
+
+	LCD_State.StatusColor = color;
+
+	ST7789_FillRectangle(
+            22,
+            197,
+            196,
+            38,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            55,
+            207,
+            text,
+            Font_11x18,
+            color,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateDuration
+==========================================================*/
+
+void BSP_LCD_UpdateDuration(uint16_t ms)
+{
+    char text[16];
+
+    if(LCD_State.Duration == ms)
+    {
+        return;
+    }
+
+    LCD_State.Duration = ms;
+
+    sprintf(text,"%u ms",ms);
+
+    ST7789_FillRectangle(
+            10,
+            245,
+            120,
+            22,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            10,
+            250,
+            text,
+            Font_7x10,
+            UI_COLOR_LABEL,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_UpdateProgress
+==========================================================*/
+
+void BSP_LCD_UpdateProgress(uint8_t percent)
+{
+    uint16_t width;
+
+    if(percent > 100)
+    {
+        percent = 100;
+    }
+
+    if(LCD_State.Progress == percent)
+    {
+        return;
+    }
+
+    LCD_State.Progress = percent;
+
+    width = (200 * percent) / 100;
+
+    ST7789_DrawRectangle(
+            18,
+            282,
+            204,
+            18,
+            UI_COLOR_BORDER);
+
+    ST7789_FillRectangle(
+            20,
+            284,
+            200,
+            14,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_FillRectangle(
+            20,
+            284,
+            width,
+            14,
+            UI_COLOR_OK);
+}
+
