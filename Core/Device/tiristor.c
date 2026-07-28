@@ -20,6 +20,9 @@ typedef struct
 
 static TiristorControl_t Tiristor;
 
+#define TIRISTOR_MIN_DELAY_US   10U
+#define TIRISTOR_GUARD_US       50U
+
 static volatile uint32_t CH1Counter = 0;
 static volatile uint32_t CH2Counter = 0;
 
@@ -123,43 +126,34 @@ uint32_t Tiristor_GetCH2Counter(void)
 
 void Tiristor_OnZeroCross(void)
 {
-if(Tiristor.Active == 0) { return; } // Счетчик ZeroCross будет инкрементироваться честно, без условий
-//ZeroCrossCounter++;
+    if(Tiristor.Active == 0) { return; }
 
-uint32_t halfPeriod = SYNC_GetHalfPeriodUs();
+    uint32_t halfPeriod = SYNC_GetHalfPeriodUs();
+    uint32_t pulseWidth = Tiristor.PulseWidthUs;
 
-Tiristor.DelayUs = (halfPeriod * Device_GetAngle()) / 180U;
-if(Tiristor.DelayUs < 10U) Tiristor.DelayUs = 10U;
-uint32_t max_delay = halfPeriod - Tiristor.PulseWidthUs - 50U;
-if(Tiristor.DelayUs > max_delay) Tiristor.DelayUs = max_delay;
+    // Без достоверного полупериода угол посчитать нельзя - пропускаем полупериод
+    if(halfPeriod <= (pulseWidth + TIRISTOR_GUARD_US)) { return; }
 
+    uint32_t max_delay = halfPeriod - pulseWidth - TIRISTOR_GUARD_US;
+    uint32_t delay = (halfPeriod * Device_GetAngle()) / 180U;
 
-TIM2->DIER &= ~(TIM_DIER_CC1IE | TIM_DIER_CC2IE);
-htim2.Instance->EGR = TIM_EGR_UG;
-TIM2->CR1 &= ~TIM_CR1_CEN; // остановили таймер
-TIM2->SR = 0;
-TIM2->CNT = 0;
-TIM2->CCR1 = Tiristor.DelayUs;
-TIM2->CCR2 = Tiristor.DelayUs + Tiristor.PulseWidthUs;
-TIM2->SR = 0;
+    if(delay < TIRISTOR_MIN_DELAY_US) { delay = TIRISTOR_MIN_DELAY_US; }
+    if(delay > max_delay)             { delay = max_delay; }
 
-TIM2->CR1 |= TIM_CR1_CEN;// снова запустили
-// 3. Очищаем флаги прерываний (так как EGR->UG принудительно взводит флаг UIF)
-//
-htim2.Instance->SR = ~(TIM_FLAG_CC1 | TIM_FLAG_CC2 | TIM_FLAG_UPDATE);
-// 4. Разрешаем прерывания каналов строго на этот полупериод
-//
-htim2.Instance->DIER |= (TIM_DIER_CC1IE | TIM_DIER_CC2IE);
+    Tiristor.DelayUs = (uint16_t)delay;
 
-
-// 1. Сначала записываем значения в теневые регистры CCR (благодаря Preload это безопасно)
-// htim2.Instance->CCR1 = Tiristor.DelayUs;
-// htim2.Instance->CCR2 = Tiristor.DelayUs + Tiristor.PulseWidthUs;
-//CCRProgramCounter++;
-// 2. Генерируем аппаратное событие обновления (Update Event)
-// Это мгновенно сбрасывает CNT в 0 и переносит новые CCR в активную работу
-//
-
+    // Порядок важен: стоп -> CCR -> UG -> сброс флагов -> разрешение IRQ -> старт.
+    // Запуск строго последним, иначе при малых углах сброс SR затирает уже
+    // взведённый CC1IF и импульс теряется.
+    TIM2->CR1  &= ~TIM_CR1_CEN;
+    TIM2->DIER &= ~(TIM_DIER_CC1IE | TIM_DIER_CC2IE);
+    TIM2->CNT   = 0;
+    TIM2->CCR1  = delay;
+    TIM2->CCR2  = delay + pulseWidth;
+    TIM2->EGR   = TIM_EGR_UG;
+    TIM2->SR    = 0;
+    TIM2->DIER |= (TIM_DIER_CC1IE | TIM_DIER_CC2IE);
+    TIM2->CR1  |= TIM_CR1_CEN;
 }
 
 /*=============================================================

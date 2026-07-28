@@ -14,6 +14,10 @@ static volatile uint32_t HalfPeriod = 0;
 static volatile uint8_t SyncPresent = 0;
 static volatile uint32_t LastPulseTick = 0;
 static volatile uint32_t TestData = 0;
+static volatile uint32_t GlitchCounter = 0;
+
+#define SYNC_HALF_PERIOD_MIN_US   7000U    // ~70 Гц
+#define SYNC_HALF_PERIOD_MAX_US   12500U   // ~40 Гц
 
 /*----------------------------------------------------------
     Initialization
@@ -33,6 +37,7 @@ void SYNC_Init(void)
     LastTime = 0;
 
     SyncCounter = 0;
+    GlitchCounter = 0;
     HalfPeriod = 0;
     SyncPresent = 0;
     LastPulseTick = HAL_GetTick();
@@ -56,18 +61,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void SYNC_EXTI_Handler(void)
 {
-
-	Device_OnZeroCross();
     uint32_t now;
     uint32_t currentOverflows;
     uint64_t currentTime;
     static uint64_t lastTime = 0; // Делаем переменную статической для сохранения между вызовами
     uint64_t diff;
 
-    // Атомарное чтение текущего счётчика и переполнений
+    // Атомарное чтение текущего счётчика и переполнений.
+    // EXTI имеет более высокий приоритет, чем TIM3_IRQn, поэтому мы можем
+    // попасть сюда после переполнения TIM3, но до того как отработал его
+    // обработчик и инкрементировал LastOverflows. Учитываем это по флагу UIF.
     __disable_irq();
     now = __HAL_TIM_GET_COUNTER(&htim3);
     currentOverflows = LastOverflows;
+    if ((htim3.Instance->SR & TIM_SR_UIF) && (now < 0x8000U))
+    {
+        currentOverflows++;
+    }
     __enable_irq();
 
     // Вычисляем текущее 64-битное время
@@ -75,18 +85,26 @@ void SYNC_EXTI_Handler(void)
 
     // Считаем разницу (при первом запуске diff может быть некорректным, это нормально)
     diff = currentTime - lastTime;
-    HalfPeriod = (uint32_t)diff;
 
     // Сохраняем текущее время для следующего прерывания
     lastTime = currentTime;
 
-    // Обновляем остальные флаги
-    LastPulseTick = HAL_GetTick();
-    SyncCounter++;
-    SyncPresent = 1;
+    // Принимаем только правдоподобный полупериод (40...70 Гц), остальное - помеха
+    if ((diff >= SYNC_HALF_PERIOD_MIN_US) && (diff <= SYNC_HALF_PERIOD_MAX_US))
+    {
+        HalfPeriod = (uint32_t)diff;
 
+        // Обновляем остальные флаги
+        LastPulseTick = HAL_GetTick();
+        SyncCounter++;
+        SyncPresent = 1;
 
-
+        Device_OnZeroCross();
+    }
+    else
+    {
+        GlitchCounter++;
+    }
 }
 
 /*----------------------------------------------------------
@@ -125,6 +143,11 @@ uint32_t SYNC_GetHalfPeriodUs(void)
 uint32_t SYNC_GetCounter(void)
 {
     return SyncCounter;
+}
+
+uint32_t SYNC_GetGlitchCounter(void)
+{
+    return GlitchCounter;
 }
 
 uint32_t SYNC_GetFrequency_x10(void)

@@ -14,6 +14,7 @@ void SYNC_Update(void);
 uint8_t SYNC_IsPresent(void);
 uint32_t SYNC_GetHalfPeriodUs(void);
 uint32_t SYNC_GetCounter(void);
+uint32_t SYNC_GetGlitchCounter(void);
 uint32_t SYNC_GetFrequency_x10(void);
 void SYNC_ResetCounter(void);
 
