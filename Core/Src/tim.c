@@ -83,9 +83,13 @@ void MX_TIM2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
-  // Включить теневые регистры для каналов 1 и 2
-  __HAL_TIM_ENABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_1);
-  __HAL_TIM_ENABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_2);
+  // Preload для CCR не нужен: канал работает в режиме TIM_OCMODE_TIMING, выход
+  // дёргается из прерывания, а новые CCR должны действовать в том же полупериоде.
+  __HAL_TIM_DISABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_1);
+  __HAL_TIM_DISABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_2);
+
+  // UG (перезапуск в Tiristor_OnZeroCross) не должен взводить флаг UIF
+  htim2.Instance->CR1 |= TIM_CR1_URS;
   /* USER CODE END TIM2_Init 2 */
 
 }
