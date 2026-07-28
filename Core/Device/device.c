@@ -2,8 +2,12 @@
 #include "bsp_lcd.h"
 #include "sync.h"
 #include "tiristor.h"
+#include "tim.h"
+
 
 Device_t Device;
+
+static volatile uint32_t ZeroCrossCounter = 0;
 
 void Device_Init(void)
 {
@@ -54,7 +58,7 @@ void Device_Start(void)
         return;
     }
 
-    Tiristor_Start();          // <-- ЭТОЙ СТРОКИ НЕ ХВАТАЕТ
+    Tiristor_Start();
 
     Device.State = DEVICE_WAIT_SYNC;
 }
@@ -76,12 +80,20 @@ void Device_OnZeroCross(void)
     if(Device.State == DEVICE_WAIT_ZERO)
     {
         Device.State = DEVICE_TEST;
+
+        Tiristor_Start();
     }
 
     if(Device.State == DEVICE_TEST)
     {
         Tiristor_OnZeroCross();
+        ZeroCrossCounter++;
     }
+}
+
+uint32_t Device_GetZeroCrossCounter(void)
+{
+    return ZeroCrossCounter;
 }
 
 void Device_Update(void)
@@ -117,7 +129,8 @@ void Device_Update(void)
 
             BSP_LCD_UpdateStatus("TEST", UI_COLOR_OK);
 
-            BSP_LCD_UpdateDuration((uint16_t)(Tiristor_GetDelay()));
+            //BSP_LCD_UpdateDuration((uint16_t)__HAL_TIM_GET_COUNTER(&htim1));
+            //BSP_LCD_UpdateDuration((uint16_t)Tiristor_GetDelayIrqCounter());
 
             break;
 

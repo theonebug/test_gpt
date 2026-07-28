@@ -22,6 +22,9 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "tiristor.h"
+#include "bsp_button.h"
+#include "bsp_encoder.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +60,7 @@
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern SPI_HandleTypeDef hspi2;
+extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
 
@@ -185,7 +189,8 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-
+	BSP_Button_Update();
+	BSP_Encoder_Update();
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
@@ -226,6 +231,35 @@ void DMA1_Channel5_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel5_IRQn 1 */
 
   /* USER CODE END DMA1_Channel5_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM2 global interrupt.
+  */
+void TIM2_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM2_IRQn 0 */
+
+  /* USER CODE END TIM2_IRQn 0 */
+
+  /* USER CODE BEGIN TIM2_IRQn 1 */
+	 uint32_t sr = TIM2->SR;
+	  uint32_t dier = TIM2->DIER;
+
+	  // Проверяем, что прерывание случилось по Каналу 1 и оно разрешено
+	  if ((sr & TIM_FLAG_CC1) && (dier & TIM_DIER_CC1IE))
+	  {
+	      Tiristor_Channel1_IRQHandler();
+	      TIM2->SR = ~TIM_FLAG_CC1; // Сбрасываем флаг в конце обработчика
+	  }
+
+	  // Проверяем, что прерывание случилось по Каналу 2 и оно разрешено
+	  if ((sr & TIM_FLAG_CC2) && (dier & TIM_DIER_CC2IE))
+	  {
+	      Tiristor_Channel2_IRQHandler();
+	      TIM2->SR = ~TIM_FLAG_CC2; // Сбрасываем флаг в конце обработчика
+	  }
+  /* USER CODE END TIM2_IRQn 1 */
 }
 
 /**

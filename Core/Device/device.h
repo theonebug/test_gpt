@@ -61,6 +61,8 @@ void Device_Stop(void);
 
 void Device_Update(void);
 
+uint32_t Device_GetZeroCrossCounter(void);
+
 DeviceState_t Device_GetState(void);
 
 /*----------------------------------------------------------

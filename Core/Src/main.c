@@ -17,7 +17,6 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <error_32.h>
 #include "main.h"
 #include "dma.h"
 #include "spi.h"
@@ -59,6 +58,7 @@
 
 /* USER CODE BEGIN PV */
 //static uint16_t Angle = 90;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,17 +104,25 @@ int main(void)
   MX_DMA_Init();
   MX_SPI2_Init();
   MX_TIM2_Init();
-  HAL_TIM_Base_Start(&htim2);
-  MX_TIM3_Init();
   MX_TIM4_Init();
   MX_USART2_UART_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim3);
+  //HAL_TIM_Base_Start_IT(&htim3);
+  //HAL_TIM_Base_Start(&htim1);
+  SYNC_Init();
   BSP_LED_Init();
   EVENT_Init();
   INPUT_Init();
   Device_Init();
   BSP_LCD_UpdateAngle(Device_GetAngle());
+  Tiristor_Init();
+
+  // 1. Аппаратно включаем сам счетчик таймера TIM2 (устанавливаем бит CR1_CEN)
+  __HAL_TIM_ENABLE(&htim2);
+
+  // 2. Разрешаем прерывание таймера в контроллере прерываний STM32 (NVIC)
+  HAL_NVIC_EnableIRQ(TIM2_IRQn);
 
   /* USER CODE END 2 */
 
@@ -140,7 +148,12 @@ int main(void)
       INPUT_Update();
       SYNC_Update();
       Device_Update();
-      Tiristor_Update();
+
+      //BSP_LCD_UpdateDuration((uint16_t)Tiristor_GetTestCounter());
+      //BSP_LCD_UpdateDuration((htim1.Instance->CR1 & TIM_CR1_CEN) ? 1 : 0);
+      //BSP_LCD_UpdateDuration(Tiristor_GetDelayIrqCounter());
+      //BSP_LCD_UpdateDuration(SYNC_GetFrequency_x10());
+
       static uint32_t SyncTimer = 0;
 
           if(HAL_GetTick() - SyncTimer >= 200)
@@ -152,16 +165,36 @@ int main(void)
               BSP_LCD_UpdateAngle(Device_GetAngle());
           }
 
+          static uint32_t PrevSync = 0;
+          static uint32_t PrevCH1  = 0;
+          static uint32_t PrevCH2  = 0;
+          static uint32_t Tick = 0;
+
+          if(HAL_GetTick() - Tick >= 1000)
+          {
+              Tick = HAL_GetTick();
+              uint32_t ds = SYNC_GetCounter() - PrevSync;
+                  uint32_t d1 = Tiristor_GetCH1Counter() - PrevCH1;
+                  uint32_t d2 = Tiristor_GetCH2Counter() - PrevCH2;
+
+                  PrevSync = SYNC_GetCounter();
+                  PrevCH1  = Tiristor_GetCH1Counter();
+                  PrevCH2  = Tiristor_GetCH2Counter();
+
+                  BSP_LCD_UpdateDuration(d1);   // сначала проверяем CH1
+          }
 
       while(EVENT_Get(&msg))
       {
           switch(msg.Id)
           {
               case EVENT_RUN_CLICK:
+            	  //BSP_LED_Toggle(LED_READY);
             	  Device_Start();
                   break;
 
               case EVENT_STOP_CLICK:
+            	  BSP_LED_Toggle(LED_ALARM);
             	  Device_Stop();
                   break;
 
@@ -170,6 +203,7 @@ int main(void)
                   break;
 
               case EVENT_ENCODER_LEFT:
+            	  BSP_LED_Toggle(LED_ALARM);
             	    if(Device.Angle < 175)
             	    {
             	    	Device_SetAngle(Device_GetAngle() + 1);
@@ -177,6 +211,7 @@ int main(void)
                   break;
 
               case EVENT_ENCODER_RIGHT:
+            	  //BSP_LED_Toggle(LED_READY);
             	    if(Device.Angle > 5)
             	    {
             	    	Device_SetAngle(Device_GetAngle() - 1);
@@ -184,17 +219,17 @@ int main(void)
                   break;
 
               case EVENT_RUN_LONG:
-                  BSP_LED_Toggle(LED_READY);
+                  //BSP_LED_Toggle(LED_READY);
                   BSP_LED_Toggle(LED_ALARM);
                   break;
 
               case EVENT_STOP_LONG:
-                  BSP_LED_Toggle(LED_READY);
+                  //BSP_LED_Toggle(LED_READY);
                   BSP_LED_Toggle(LED_PULSE);
                   break;
 
               case EVENT_ENCODER_LONG:
-                  BSP_LED_Toggle(LED_READY);
+                  //BSP_LED_Toggle(LED_READY);
                   BSP_LED_Toggle(LED_ALARM);
                   BSP_LED_Toggle(LED_PULSE);
                   break;
@@ -210,9 +245,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-  }
-  /* USER CODE END 3 */
 
+  /* USER CODE END 3 */
+}
 
 /**
   * @brief System Clock Configuration
@@ -254,15 +289,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-
-    if (htim->Instance == TIM3)
-    {
-        BSP_Button_Update();
-        BSP_Encoder_Update();
-    }
-}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -271,6 +297,23 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         SYNC_EXTI_Handler();
     }
 }
+
+//void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
+//{
+//    if(htim->Instance == TIM2)
+//    {
+//        if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+//        {
+//            //TestCounter = 1111;
+//            Tiristor_Channel1_IRQHandler();
+//        }
+//        else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)
+//        {
+//            //TestCounter = 2222;
+//            Tiristor_Channel2_IRQHandler();
+//        }
+//    }
+//}
 /* USER CODE END 4 */
 
 /**
