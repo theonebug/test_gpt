@@ -380,6 +380,9 @@ void MENU_Close(void)
     MenuActive  = false;
     MenuEditing = false;
 
+    /* Настройки уезжают во Flash при выходе из меню */
+    SETTINGS_RequestSave();
+
     /* Сбрасываем кэш значений, иначе главный экран не перерисует поля */
     BSP_LCD_Invalidate();
 

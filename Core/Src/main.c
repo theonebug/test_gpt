@@ -152,6 +152,7 @@ int main(void)
       INPUT_Update();
       SYNC_Update();
       Device_Update();
+      SETTINGS_Process();
 
       //BSP_LCD_UpdateDuration((uint16_t)Tiristor_GetTestCounter());
       //BSP_LCD_UpdateDuration((htim1.Instance->CR1 & TIM_CR1_CEN) ? 1 : 0);
