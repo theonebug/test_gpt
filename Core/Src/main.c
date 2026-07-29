@@ -39,6 +39,7 @@
 #include "tiristor.h"
 #include "settings.h"
 #include "menu.h"
+#include "modbus.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -176,6 +177,7 @@ int main(void)
   Tiristor_Init();
   SETTINGS_Init();
   MENU_Init();
+  MODBUS_Init();
 
   // 1. Аппаратно включаем сам счетчик таймера TIM2 (устанавливаем бит CR1_CEN)
   __HAL_TIM_ENABLE(&htim2);
@@ -194,7 +196,7 @@ int main(void)
   BSP_LCD_SetScreen(LCD_SCREEN_MAIN);
   BSP_LCD_UpdateAngle(Device.Angle);
   BSP_LCD_UpdateMode(0);
-  BSP_LCD_UpdateRS485(1);
+  BSP_LCD_UpdateRS485(0);
   BSP_LCD_UpdateSync(1);
 
   BSP_LCD_UpdateStatus("READY", UI_COLOR_OK);
@@ -215,6 +217,7 @@ int main(void)
       INPUT_Update();
       SYNC_Update();
       Tiristor_Process();
+      MODBUS_Process();
       Device_Update();
       SETTINGS_Process();
 
@@ -230,6 +233,10 @@ int main(void)
               SyncTimer = HAL_GetTick();
 
               BSP_LCD_UpdateSync(SYNC_IsPresent());
+
+              BSP_LCD_UpdateRS485(MODBUS_IsOnline());
+
+              BSP_LCD_UpdateMode(Device.Remote);
 
               BSP_LCD_UpdateAngle(Device_GetAngle());
 

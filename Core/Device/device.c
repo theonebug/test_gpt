@@ -32,12 +32,12 @@ void Device_Init(void)
 
 void Device_SetAngle(uint16_t angle)
 {
-    if(angle < 5)
+    if(angle < DEVICE_ANGLE_MIN)
     {
         angle = 5;
     }
 
-    if(angle > 175)
+    if(angle > DEVICE_ANGLE_MAX)
     {
         angle = 175;
     }

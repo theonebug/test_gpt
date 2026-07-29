@@ -6,6 +6,7 @@
 #include "tiristor.h"
 #include "device.h"
 #include "sync.h"
+#include "modbus.h"
 
 /*=============================================================
  * Хранение во Flash
@@ -231,7 +232,7 @@ void SETTINGS_Apply(void)
     SYNC_SetFreqWindow(SETTINGS_FREQ_NOMINAL_X10 - Settings.FreqDeviationX10,
                        SETTINGS_FREQ_NOMINAL_X10 + Settings.FreqDeviationX10);
 
-    /* RS485 применяется при инициализации драйвера UART (пока не реализован) */
+    MODBUS_ApplySettings();
 }
 
 void SETTINGS_RequestSave(void)

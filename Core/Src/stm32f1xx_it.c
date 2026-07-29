@@ -25,6 +25,7 @@
 #include "tiristor.h"
 #include "bsp_button.h"
 #include "bsp_encoder.h"
+#include "modbus.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -261,6 +262,16 @@ void TIM2_IRQHandler(void)
 	      TIM2->SR = ~TIM_FLAG_CC2; // Сбрасываем флаг в конце обработчика
 	  }
   /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART2 global interrupt (Modbus RTU).
+  */
+void USART2_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART2_IRQn 0 */
+  MODBUS_RxIRQHandler();
+  /* USER CODE END USART2_IRQn 0 */
 }
 
 /**

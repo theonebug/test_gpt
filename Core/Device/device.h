@@ -7,6 +7,10 @@
     Device state machine
 ----------------------------------------------------------*/
 
+/* Допустимый диапазон угла открытия */
+#define DEVICE_ANGLE_MIN    5U
+#define DEVICE_ANGLE_MAX    175U
+
 typedef enum
 {
     DEVICE_READY = 0,
