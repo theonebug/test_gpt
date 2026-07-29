@@ -51,6 +51,8 @@ static void LCD_DrawMenu(void);
 static void LCD_DrawSettings(void);
 static void LCD_DrawService(void);
 
+static void LCD_DrawIcon(uint16_t x, uint16_t y, const uint8_t *image);
+
 /*==========================================================
     BSP_LCD_Init
 ==========================================================*/
@@ -174,12 +176,7 @@ static void LCD_DrawSplash(void)
             UI_COLOR_TITLE,
             UI_COLOR_BACKGROUND);
 
-    ST7789_DrawImage(
-            104,
-            90,
-            32,
-            32,
-            ok_32);
+    LCD_DrawIcon(104, 90, ok_32);
 
     ST7789_WriteString(
             82,
@@ -382,12 +379,7 @@ void BSP_LCD_UpdateRS485(uint8_t ok)
             32,
             UI_COLOR_BACKGROUND);
 
-    ST7789_DrawImage(
-            190,
-            4,
-            32,
-            32,
-            ok ? ok_32 : error_32);
+    LCD_DrawIcon(190, 4, ok ? ok_32 : error_32);
 }
 
 /*==========================================================
@@ -410,12 +402,7 @@ void BSP_LCD_UpdateSync(uint8_t ok)
             32,
             UI_COLOR_BACKGROUND);
 
-    ST7789_DrawImage(
-            75,
-            44,
-            32,
-            32,
-            ok ? ok_32 : error_32);
+    LCD_DrawIcon(75, 44, ok ? ok_32 : error_32);
 }
 
 /*==========================================================
@@ -518,6 +505,47 @@ void BSP_LCD_UpdateDuration(uint16_t ms)
             Font_7x10,
             UI_COLOR_LABEL,
             UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    LCD_DrawIcon
+
+    Иконки 32x32 хранятся со своим фоном (ok - серый, error - чёрный).
+    Цвет первого пикселя считается фоновым и заменяется на фон экрана.
+==========================================================*/
+
+#define LCD_ICON_SIZE   32U
+
+static void LCD_DrawIcon(uint16_t x, uint16_t y, const uint8_t *image)
+{
+    static uint8_t line[LCD_ICON_SIZE * 2U];
+
+    const uint8_t keyHi = image[0];
+    const uint8_t keyLo = image[1];
+
+    const uint8_t bgHi = (uint8_t)(UI_COLOR_BACKGROUND >> 8);
+    const uint8_t bgLo = (uint8_t)(UI_COLOR_BACKGROUND & 0xFFU);
+
+    for(uint16_t row = 0; row < LCD_ICON_SIZE; row++)
+    {
+        const uint8_t *src = &image[row * LCD_ICON_SIZE * 2U];
+
+        for(uint16_t i = 0; i < (LCD_ICON_SIZE * 2U); i += 2U)
+        {
+            if((src[i] == keyHi) && (src[i + 1U] == keyLo))
+            {
+                line[i]      = bgHi;
+                line[i + 1U] = bgLo;
+            }
+            else
+            {
+                line[i]      = src[i];
+                line[i + 1U] = src[i + 1U];
+            }
+        }
+
+        ST7789_DrawImage(x, y + row, LCD_ICON_SIZE, 1U, line);
+    }
 }
 
 /*==========================================================

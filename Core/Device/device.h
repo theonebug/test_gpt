@@ -68,6 +68,9 @@ uint32_t Device_GetElapsedMs(void);
 
 DeviceState_t Device_GetState(void);
 
+/* 1 - устройство в READY: разрешены угол, меню и настройки */
+uint8_t Device_IsIdle(void);
+
 /*----------------------------------------------------------
     Angle
 ----------------------------------------------------------*/

@@ -204,20 +204,20 @@ int main(void)
               continue;
           }
 
+          /* Когда устройство управляет тиристором, доступна только STOP */
+          if(!Device_IsIdle() && (msg.Id != EVENT_STOP_CLICK))
+          {
+              continue;
+          }
+
           switch(msg.Id)
           {
               case EVENT_RUN_CLICK:
-            	  //BSP_LED_Toggle(LED_READY);
-            	  Device_Start();
+                  Device_Start();
                   break;
 
               case EVENT_STOP_CLICK:
-            	  BSP_LED_Toggle(LED_ALARM);
-            	  Device_Stop();
-                  break;
-
-              case EVENT_ENCODER_CLICK:
-                  BSP_LED_Toggle(LED_PULSE);
+                  Device_Stop();
                   break;
 
               case EVENT_ENCODER_LONG:
@@ -226,32 +226,12 @@ int main(void)
                   break;
 
               case EVENT_ENCODER_LEFT:
-            	  BSP_LED_Toggle(LED_ALARM);
-            	    if(Device.Angle < 175)
-            	    {
-            	    	Device_SetAngle(Device_GetAngle() + 1);
-            	    }
+                  Device_SetAngle(Device_GetAngle() + 1);
                   break;
 
               case EVENT_ENCODER_RIGHT:
-            	  //BSP_LED_Toggle(LED_READY);
-            	    if(Device.Angle > 5)
-            	    {
-            	    	Device_SetAngle(Device_GetAngle() - 1);
-            	    }
+                  Device_SetAngle(Device_GetAngle() - 1);
                   break;
-
-              case EVENT_RUN_LONG:
-                  //BSP_LED_Toggle(LED_READY);
-                  BSP_LED_Toggle(LED_ALARM);
-                  break;
-
-              case EVENT_STOP_LONG:
-                  //BSP_LED_Toggle(LED_READY);
-                  BSP_LED_Toggle(LED_PULSE);
-                  break;
-
-
 
               default:
                   break;

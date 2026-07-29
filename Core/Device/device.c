@@ -1,5 +1,6 @@
 #include "device.h"
 #include "bsp_lcd.h"
+#include "bsp_led.h"
 #include "sync.h"
 #include "tiristor.h"
 #include "settings.h"
@@ -56,9 +57,20 @@ uint16_t Device_GetAngle(void)
     return Device.Angle;
 }
 
+uint8_t Device_IsIdle(void)
+{
+    return (Device.State == DEVICE_READY) ? 1U : 0U;
+}
+
 void Device_Start(void)
 {
     if(Device.State != DEVICE_READY)
+    {
+        return;
+    }
+
+    /* Без синхронизации запускаться нельзя */
+    if(!SYNC_IsPresent())
     {
         return;
     }
@@ -126,9 +138,30 @@ uint32_t Device_GetElapsedMs(void)
     return HAL_GetTick() - TestStartTick;
 }
 
+/* Светодиоды отражают состояние устройства, а не нажатия кнопок */
+static void Device_UpdateLeds(void)
+{
+    BSP_LED_Set(LED_READY,
+                (Device.State == DEVICE_READY) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    BSP_LED_Set(LED_PULSE,
+                Tiristor_IsActive() ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    BSP_LED_Set(LED_ALARM,
+                Device.SyncOK ? GPIO_PIN_RESET : GPIO_PIN_SET);
+}
+
 void Device_Update(void)
 {
     Device.SyncOK = SYNC_IsPresent();
+
+    /* Потеря синхронизации во время работы - аварийный стоп */
+    if(!Device.SyncOK && (Device.State != DEVICE_READY))
+    {
+        Device_Stop();
+    }
+
+    Device_UpdateLeds();
 
     if(BSP_LCD_GetScreen() != LCD_SCREEN_MAIN)
     {

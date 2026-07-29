@@ -367,6 +367,12 @@ void MENU_Open(void)
         return;
     }
 
+    /* Меню доступно только в состоянии READY */
+    if(!Device_IsIdle())
+    {
+        return;
+    }
+
     MenuActive  = true;
     MenuEditing = false;
     MenuCursor  = 0U;
