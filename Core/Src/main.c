@@ -37,6 +37,8 @@
 #include "device.h"
 #include "sync.h"
 #include "tiristor.h"
+#include "settings.h"
+#include "menu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -117,6 +119,8 @@ int main(void)
   Device_Init();
   BSP_LCD_UpdateAngle(Device_GetAngle());
   Tiristor_Init();
+  SETTINGS_Init();
+  MENU_Init();
 
   // 1. Аппаратно включаем сам счетчик таймера TIM2 (устанавливаем бит CR1_CEN)
   __HAL_TIM_ENABLE(&htim2);
@@ -156,7 +160,7 @@ int main(void)
 
       static uint32_t SyncTimer = 0;
 
-          if(HAL_GetTick() - SyncTimer >= 200)
+          if((HAL_GetTick() - SyncTimer >= 200) && !MENU_IsActive())
           {
               SyncTimer = HAL_GetTick();
 
@@ -170,7 +174,7 @@ int main(void)
           static uint32_t PrevCH2  = 0;
           static uint32_t Tick = 0;
 
-          if(HAL_GetTick() - Tick >= 1000)
+          if((HAL_GetTick() - Tick >= 1000) && !MENU_IsActive())
           {
               Tick = HAL_GetTick();
               uint32_t ds = SYNC_GetCounter() - PrevSync;
@@ -186,6 +190,12 @@ int main(void)
 
       while(EVENT_Get(&msg))
       {
+          /* Когда открыто меню настроек, энкодер работает на меню */
+          if(MENU_HandleEvent(&msg))
+          {
+              continue;
+          }
+
           switch(msg.Id)
           {
               case EVENT_RUN_CLICK:
@@ -200,6 +210,11 @@ int main(void)
 
               case EVENT_ENCODER_CLICK:
                   BSP_LED_Toggle(LED_PULSE);
+                  break;
+
+              case EVENT_ENCODER_LONG:
+                  /* Длительное нажатие кнопки энкодера - меню настроек */
+                  MENU_Open();
                   break;
 
               case EVENT_ENCODER_LEFT:
@@ -228,11 +243,6 @@ int main(void)
                   BSP_LED_Toggle(LED_PULSE);
                   break;
 
-              case EVENT_ENCODER_LONG:
-                  //BSP_LED_Toggle(LED_READY);
-                  BSP_LED_Toggle(LED_ALARM);
-                  BSP_LED_Toggle(LED_PULSE);
-                  break;
 
 
               default:

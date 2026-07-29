@@ -2,12 +2,17 @@
 #include "bsp_lcd.h"
 #include "sync.h"
 #include "tiristor.h"
+#include "settings.h"
 #include "tim.h"
 
 
 Device_t Device;
 
 static volatile uint32_t ZeroCrossCounter = 0;
+
+/* Счётчики текущего запуска */
+static volatile uint32_t TestStartTick = 0;
+static volatile uint32_t TestHalfWaves = 0;
 
 void Device_Init(void)
 {
@@ -58,6 +63,9 @@ void Device_Start(void)
         return;
     }
 
+    TestStartTick = HAL_GetTick();
+    TestHalfWaves = 0;
+
     Tiristor_Start();
 
     Device.State = DEVICE_WAIT_SYNC;
@@ -81,12 +89,24 @@ void Device_OnZeroCross(void)
     {
         Device.State = DEVICE_TEST;
 
+        /* Отсчёт времени работы идёт от первой полуволны */
+        TestStartTick = HAL_GetTick();
+        TestHalfWaves = 0;
+
         Tiristor_Start();
     }
 
     if(Device.State == DEVICE_TEST)
     {
-        Tiristor_OnZeroCross();
+        /* WORK_MODE_FIRST_WAVE: срезается только первая полуволна,
+           остальные идут без искажений до конца заданного времени */
+        if((Settings.WorkMode != WORK_MODE_FIRST_WAVE) ||
+           (TestHalfWaves == 0U))
+        {
+            Tiristor_OnZeroCross();
+        }
+
+        TestHalfWaves++;
         ZeroCrossCounter++;
     }
 }
@@ -96,9 +116,34 @@ uint32_t Device_GetZeroCrossCounter(void)
     return ZeroCrossCounter;
 }
 
+uint32_t Device_GetElapsedMs(void)
+{
+    if((Device.State != DEVICE_TEST) && (Device.State != DEVICE_FINISHED))
+    {
+        return 0U;
+    }
+
+    return HAL_GetTick() - TestStartTick;
+}
+
 void Device_Update(void)
 {
     Device.SyncOK = SYNC_IsPresent();
+
+    if(BSP_LCD_GetScreen() != LCD_SCREEN_MAIN)
+    {
+        /* На экране меню главный экран не трогаем, но логику ведём */
+        if((Device.State == DEVICE_TEST) &&
+           (Settings.WorkMode != WORK_MODE_CONTINUOUS) &&
+           (Device_GetElapsedMs() >= Settings.DurationMs))
+        {
+            Device.State = DEVICE_FINISHED;
+
+            Device_Stop();
+        }
+
+        return;
+    }
 
     switch(Device.State)
     {
@@ -128,6 +173,23 @@ void Device_Update(void)
         case DEVICE_TEST:
 
             BSP_LCD_UpdateStatus("TEST", UI_COLOR_OK);
+
+            if(Settings.WorkMode != WORK_MODE_CONTINUOUS)
+            {
+                uint32_t elapsed = Device_GetElapsedMs();
+
+                if(elapsed >= Settings.DurationMs)
+                {
+                    BSP_LCD_UpdateProgress(100U);
+
+                    Device.State = DEVICE_FINISHED;
+                }
+                else
+                {
+                    BSP_LCD_UpdateProgress(
+                        (uint8_t)((elapsed * 100U) / Settings.DurationMs));
+                }
+            }
 
             //BSP_LCD_UpdateDuration((uint16_t)__HAL_TIM_GET_COUNTER(&htim1));
             //BSP_LCD_UpdateDuration((uint16_t)Tiristor_GetDelayIrqCounter());

@@ -59,7 +59,7 @@ void BSP_LCD_Init(void)
 {
     ST7789_Init();
 
-    memset(&LCD_State,0xFF,sizeof(LCD_State));
+    BSP_LCD_Invalidate();
 
     CurrentScreen = LCD_SCREEN_SPLASH;
 }
@@ -72,6 +72,18 @@ void BSP_LCD_Clear(void)
 {
     ST7789_Fill_Color_DMA(
             UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_Invalidate
+==========================================================*/
+
+void BSP_LCD_Invalidate(void)
+{
+    memset(&LCD_State,0xFF,sizeof(LCD_State));
+
+    /* strcmp() по Status требует завершающего нуля */
+    LCD_State.Status[sizeof(LCD_State.Status)-1] = '\0';
 }
 
 /*==========================================================

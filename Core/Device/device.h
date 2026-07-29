@@ -63,6 +63,9 @@ void Device_Update(void);
 
 uint32_t Device_GetZeroCrossCounter(void);
 
+/* Время с начала текущего запуска, мс */
+uint32_t Device_GetElapsedMs(void);
+
 DeviceState_t Device_GetState(void);
 
 /*----------------------------------------------------------
