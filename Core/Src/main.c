@@ -101,17 +101,24 @@ static void TiristorOutput_SafeInit(void)
 
 static void Watchdog_Init(void)
 {
+  uint32_t timeout;
+
+  /* Сначала запуск: LSI тактируется только после включения IWDG,
+     иначе биты SR никогда не сбросятся и ожидание зависнет. */
+  IWDG->KR = WATCHDOG_KEY_ENABLE;
+
   /* LSI ~40 кГц / 32 = 1.25 кГц, 625 тиков -> ~500 мс */
   IWDG->KR  = WATCHDOG_KEY_WRITE;
   IWDG->PR  = IWDG_PR_PR_0 | IWDG_PR_PR_1;   /* делитель 32 */
   IWDG->RLR = 625U;
 
-  while(IWDG->SR != 0U)
+  timeout = HAL_GetTick() + 100U;
+
+  while((IWDG->SR != 0U) && (HAL_GetTick() < timeout))
   {
   }
 
   IWDG->KR = WATCHDOG_KEY_RELOAD;
-  IWDG->KR = WATCHDOG_KEY_ENABLE;
 }
 
 static void Watchdog_Refresh(void)
