@@ -26,6 +26,9 @@ static TiristorControl_t Tiristor;
 static volatile uint32_t CH1Counter = 0;
 static volatile uint32_t CH2Counter = 0;
 
+/* Заход в OnZeroCross, когда предыдущий импульс ещё не завершён */
+static volatile uint32_t RestartCounter = 0;
+
 /*=============================================================
  * Инициализация
  *=============================================================*/
@@ -120,6 +123,11 @@ uint32_t Tiristor_GetCH2Counter(void)
     return CH2Counter;
 }
 
+uint32_t Tiristor_GetRestartCounter(void)
+{
+    return RestartCounter;
+}
+
 /*=============================================================
  * Переход через ноль
  *=============================================================*/
@@ -141,6 +149,12 @@ void Tiristor_OnZeroCross(void)
     if(delay > max_delay)             { delay = max_delay; }
 
     Tiristor.DelayUs = (uint16_t)delay;
+
+    if(TIM2->CR1 & TIM_CR1_CEN)
+    {
+        /* Предыдущий полупериод не успел закончиться */
+        RestartCounter++;
+    }
 
     // Порядок важен: стоп -> CCR -> UG -> сброс флагов -> разрешение IRQ -> старт.
     // Запуск строго последним, иначе при малых углах сброс SR затирает уже

@@ -19,7 +19,7 @@
 #define MENU_ROW_H          26U
 #define MENU_ROW_TEXT_DY    4U
 #define MENU_VISIBLE_ROWS   9U
-#define MENU_VALUE_X        130U
+#define MENU_VALUE_RIGHT_X  232U
 #define MENU_TEXT_X         8U
 
 /*=============================================================
@@ -208,10 +208,17 @@ static void MENU_DrawRow(uint8_t index)
 
     if(value[0] != '\0')
     {
-        ST7789_WriteString(MENU_VALUE_X,
-                           y + MENU_ROW_TEXT_DY,
+        /* Значение мелким шрифтом и по правому краю:
+           длинные строки типа "CONTINUOUS" не наезжают на название */
+        uint16_t width = (uint16_t)(strlen(value) * Font_7x10.width);
+        uint16_t x     = (width < MENU_VALUE_RIGHT_X)
+                       ? (uint16_t)(MENU_VALUE_RIGHT_X - width)
+                       : 0U;
+
+        ST7789_WriteString(x,
+                           y + ((MENU_ROW_H - Font_7x10.height) / 2U),
                            value,
-                           Font_11x18,
+                           Font_7x10,
                            valueColor,
                            bg);
     }

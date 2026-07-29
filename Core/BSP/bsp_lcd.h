@@ -55,4 +55,10 @@ void BSP_LCD_UpdateDuration(uint16_t ms);
 
 void BSP_LCD_UpdateProgress(uint8_t percent);
 
+/* Строка диагностики: события за последнюю секунду */
+void BSP_LCD_UpdateDebug(uint16_t sync,
+                         uint16_t glitch,
+                         uint16_t pulses,
+                         uint16_t restarts);
+
 #endif

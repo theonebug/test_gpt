@@ -521,6 +521,38 @@ void BSP_LCD_UpdateDuration(uint16_t ms)
 }
 
 /*==========================================================
+    BSP_LCD_UpdateDebug
+
+    S - переходы через ноль, G - отбракованные (помеха),
+    C - импульсы CH1, R - перезапуски до конца импульса (всё за 1 с)
+==========================================================*/
+
+void BSP_LCD_UpdateDebug(uint16_t sync,
+                         uint16_t glitch,
+                         uint16_t pulses,
+                         uint16_t restarts)
+{
+    char text[32];
+
+    sprintf(text,"S%u G%u C%u R%u",sync,glitch,pulses,restarts);
+
+    ST7789_FillRectangle(
+            10,
+            262,
+            220,
+            12,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            10,
+            263,
+            text,
+            Font_7x10,
+            UI_COLOR_LABEL,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
     BSP_LCD_UpdateProgress
 ==========================================================*/
 

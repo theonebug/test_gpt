@@ -170,23 +170,30 @@ int main(void)
               BSP_LCD_UpdateAngle(Device_GetAngle());
           }
 
-          static uint32_t PrevSync = 0;
-          static uint32_t PrevCH1  = 0;
-          static uint32_t PrevCH2  = 0;
+          static uint32_t PrevSync    = 0;
+          static uint32_t PrevGlitch  = 0;
+          static uint32_t PrevCH1     = 0;
+          static uint32_t PrevRestart = 0;
           static uint32_t Tick = 0;
 
           if((HAL_GetTick() - Tick >= 1000) && !MENU_IsActive())
           {
               Tick = HAL_GetTick();
-              uint32_t ds = SYNC_GetCounter() - PrevSync;
-                  uint32_t d1 = Tiristor_GetCH1Counter() - PrevCH1;
-                  uint32_t d2 = Tiristor_GetCH2Counter() - PrevCH2;
 
-                  PrevSync = SYNC_GetCounter();
-                  PrevCH1  = Tiristor_GetCH1Counter();
-                  PrevCH2  = Tiristor_GetCH2Counter();
+              uint32_t sync    = SYNC_GetCounter();
+              uint32_t glitch  = SYNC_GetGlitchCounter();
+              uint32_t ch1     = Tiristor_GetCH1Counter();
+              uint32_t restart = Tiristor_GetRestartCounter();
 
-                  BSP_LCD_UpdateDuration(d1);   // сначала проверяем CH1
+              BSP_LCD_UpdateDebug((uint16_t)(sync    - PrevSync),
+                                  (uint16_t)(glitch  - PrevGlitch),
+                                  (uint16_t)(ch1     - PrevCH1),
+                                  (uint16_t)(restart - PrevRestart));
+
+              PrevSync    = sync;
+              PrevGlitch  = glitch;
+              PrevCH1     = ch1;
+              PrevRestart = restart;
           }
 
       while(EVENT_Get(&msg))

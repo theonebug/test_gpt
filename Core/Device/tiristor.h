@@ -54,6 +54,7 @@ void Tiristor_Channel2_IRQHandler(void);
 
 uint32_t Tiristor_GetCH1Counter(void);
 uint32_t Tiristor_GetCH2Counter(void);
+uint32_t Tiristor_GetRestartCounter(void);
 
 #ifdef __cplusplus
 }
