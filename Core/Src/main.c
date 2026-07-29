@@ -199,7 +199,6 @@ int main(void)
 
   BSP_LCD_UpdateStatus("READY", UI_COLOR_OK);
   BSP_LCD_UpdateDuration(250);
-  BSP_LCD_UpdateProgress(75);
 
   /* Сторож запускаем после долгой отрисовки заставки.
      На отладке остановка на точке не должна сбрасывать контроллер. */
@@ -233,6 +232,8 @@ int main(void)
               BSP_LCD_UpdateSync(SYNC_IsPresent());
 
               BSP_LCD_UpdateAngle(Device_GetAngle());
+
+              BSP_LCD_UpdateHeartbeat();
           }
 
           static uint32_t PrevSync    = 0;

@@ -53,7 +53,8 @@ void BSP_LCD_UpdateStatus(const char *text,
 
 void BSP_LCD_UpdateDuration(uint16_t ms);
 
-void BSP_LCD_UpdateProgress(uint8_t percent);
+/* Вращающийся индикатор работоспособности */
+void BSP_LCD_UpdateHeartbeat(void);
 
 /* Строка диагностики: события за последнюю секунду */
 void BSP_LCD_UpdateDebug(uint16_t sync,

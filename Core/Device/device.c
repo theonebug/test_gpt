@@ -153,8 +153,10 @@ static uint8_t Device_MaxRunExpired(void)
 /* Светодиоды отражают состояние устройства, а не нажатия кнопок */
 static void Device_UpdateLeds(void)
 {
+    /* READY только когда прибор действительно готов к пуску */
     BSP_LED_Set(LED_READY,
-                (Device.State == DEVICE_READY) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                ((Device.State == DEVICE_READY) && Device.SyncOK)
+                        ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
     BSP_LED_Set(LED_PULSE,
                 Tiristor_IsActive() ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -232,14 +234,7 @@ void Device_Update(void)
 
                 if(elapsed >= Settings.DurationMs)
                 {
-                    BSP_LCD_UpdateProgress(100U);
-
                     Device.State = DEVICE_FINISHED;
-                }
-                else
-                {
-                    BSP_LCD_UpdateProgress(
-                        (uint8_t)((elapsed * 100U) / Settings.DurationMs));
                 }
             }
 
