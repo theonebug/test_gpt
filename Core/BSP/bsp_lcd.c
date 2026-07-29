@@ -72,6 +72,8 @@ void BSP_LCD_Init(void)
 
 void BSP_LCD_Clear(void)
 {
+    Watchdog_Refresh();
+
     ST7789_Fill_Color_DMA(
             UI_COLOR_BACKGROUND);
 }

@@ -121,7 +121,7 @@ static void Watchdog_Init(void)
   IWDG->KR = WATCHDOG_KEY_RELOAD;
 }
 
-static void Watchdog_Refresh(void)
+void Watchdog_Refresh(void)
 {
   IWDG->KR = WATCHDOG_KEY_RELOAD;
 }

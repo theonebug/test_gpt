@@ -222,6 +222,8 @@ static void MENU_DrawRow(uint8_t index)
     titleColor = selected ? UI_COLOR_VALUE : UI_COLOR_LABEL;
     valueColor = (selected && MenuEditing) ? UI_COLOR_WARNING : UI_COLOR_VALUE;
 
+    Watchdog_Refresh();
+
     ST7789_FillRectangle(0, y, ST7789_WIDTH, MENU_ROW_H, bg);
 
     ST7789_WriteString(MENU_TEXT_X,
