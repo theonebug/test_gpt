@@ -61,6 +61,7 @@
 /* USER CODE BEGIN PV */
 //static uint16_t Angle = 90;
 
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +72,52 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* Гашение выхода до инициализации периферии: после сброса во время
+   импульса пин не должен оставаться поднятым */
+static void TiristorOutput_SafeInit(void)
+{
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+
+  GPIO_InitTypeDef init = {0};
+
+  init.Pin   = TIRISTOR_OUT_Pin;
+  init.Mode  = GPIO_MODE_OUTPUT_PP;
+  init.Pull  = GPIO_NOPULL;
+  init.Speed = GPIO_SPEED_FREQ_HIGH;
+
+  HAL_GPIO_Init(TIRISTOR_OUT_GPIO_Port, &init);
+
+  TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+}
+
+/* Сторожевой таймер на регистрах (HAL IWDG в проект не включён):
+   зависание прошивки с открытым тиристором опасно. */
+#define WATCHDOG_KEY_RELOAD   0x0000AAAAUL
+#define WATCHDOG_KEY_ENABLE   0x0000CCCCUL
+#define WATCHDOG_KEY_WRITE    0x00005555UL
+
+static void Watchdog_Init(void)
+{
+  /* LSI ~40 кГц / 32 = 1.25 кГц, 625 тиков -> ~500 мс */
+  IWDG->KR  = WATCHDOG_KEY_WRITE;
+  IWDG->PR  = IWDG_PR_PR_0 | IWDG_PR_PR_1;   /* делитель 32 */
+  IWDG->RLR = 625U;
+
+  while(IWDG->SR != 0U)
+  {
+  }
+
+  IWDG->KR = WATCHDOG_KEY_RELOAD;
+  IWDG->KR = WATCHDOG_KEY_ENABLE;
+}
+
+static void Watchdog_Refresh(void)
+{
+  IWDG->KR = WATCHDOG_KEY_RELOAD;
+}
 
 /* USER CODE END 0 */
 
@@ -91,6 +138,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  TiristorOutput_SafeInit();
 
   /* USER CODE END Init */
 
@@ -146,11 +194,21 @@ int main(void)
   BSP_LCD_UpdateDuration(250);
   BSP_LCD_UpdateProgress(75);
 
+  /* Сторож запускаем после долгой отрисовки заставки.
+     На отладке остановка на точке не должна сбрасывать контроллер. */
+  __HAL_RCC_AFIO_CLK_ENABLE();
+  DBGMCU->CR |= DBGMCU_CR_DBG_IWDG_STOP;
+
+  Watchdog_Init();
+
   EventMessage_t msg;
   while (1)
   {
+      Watchdog_Refresh();
+
       INPUT_Update();
       SYNC_Update();
+      Tiristor_Process();
       Device_Update();
       SETTINGS_Process();
 
@@ -174,6 +232,7 @@ int main(void)
           static uint32_t PrevGlitch  = 0;
           static uint32_t PrevCH1     = 0;
           static uint32_t PrevRestart = 0;
+          static uint32_t PrevWatchdog = 0;
           static uint32_t Tick = 0;
 
           if((HAL_GetTick() - Tick >= 1000) && !MENU_IsActive())
@@ -184,16 +243,19 @@ int main(void)
               uint32_t glitch  = SYNC_GetGlitchCounter();
               uint32_t ch1     = Tiristor_GetCH1Counter();
               uint32_t restart = Tiristor_GetRestartCounter();
+              uint32_t wdog    = Tiristor_GetWatchdogCounter();
 
               BSP_LCD_UpdateDebug((uint16_t)(sync    - PrevSync),
                                   (uint16_t)(glitch  - PrevGlitch),
                                   (uint16_t)(ch1     - PrevCH1),
-                                  (uint16_t)(restart - PrevRestart));
+                                  (uint16_t)(restart - PrevRestart),
+                                  (uint16_t)(wdog    - PrevWatchdog));
 
               PrevSync    = sync;
               PrevGlitch  = glitch;
               PrevCH1     = ch1;
               PrevRestart = restart;
+              PrevWatchdog = wdog;
           }
 
       while(EVENT_Get(&msg))
@@ -322,6 +384,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
+  Tiristor_EmergencyOff();
   __disable_irq();
   while (1)
   {

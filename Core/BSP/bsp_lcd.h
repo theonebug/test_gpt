@@ -59,6 +59,7 @@ void BSP_LCD_UpdateProgress(uint8_t percent);
 void BSP_LCD_UpdateDebug(uint16_t sync,
                          uint16_t glitch,
                          uint16_t pulses,
-                         uint16_t restarts);
+                         uint16_t restarts,
+                         uint16_t watchdog);
 
 #endif

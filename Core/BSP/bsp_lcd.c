@@ -558,11 +558,12 @@ static void LCD_DrawIcon(uint16_t x, uint16_t y, const uint8_t *image)
 void BSP_LCD_UpdateDebug(uint16_t sync,
                          uint16_t glitch,
                          uint16_t pulses,
-                         uint16_t restarts)
+                         uint16_t restarts,
+                         uint16_t watchdog)
 {
-    char text[32];
+    char text[48];
 
-    sprintf(text,"S%u G%u C%u R%u",sync,glitch,pulses,restarts);
+    sprintf(text,"S%u G%u C%u R%u W%u",sync,glitch,pulses,restarts,watchdog);
 
     ST7789_FillRectangle(
             10,

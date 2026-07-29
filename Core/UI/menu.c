@@ -32,6 +32,22 @@ static void MENU_FormatDuration(uint16_t value, char *buf, uint8_t size)
     snprintf(buf, size, "%u.%u s", value / 1000U, (value % 1000U) / 100U);
 }
 
+static void MENU_FormatSeconds(uint16_t value, char *buf, uint8_t size)
+{
+    snprintf(buf, size, "%u s", value);
+}
+
+static void MENU_FormatFreqWindow(uint16_t value, char *buf, uint8_t size)
+{
+    /* Отклонение в 0.1 Гц -> "48.0-52.0" */
+    uint16_t min = SETTINGS_FREQ_NOMINAL_X10 - value;
+    uint16_t max = SETTINGS_FREQ_NOMINAL_X10 + value;
+
+    snprintf(buf, size, "%u.%u-%u.%u",
+             min / 10U, min % 10U,
+             max / 10U, max % 10U);
+}
+
 static void MENU_FormatBaud(uint16_t value, char *buf, uint8_t size)
 {
     uint16_t index = (value < SETTINGS_RS485_BAUD_COUNT) ? value : 0U;
@@ -96,6 +112,17 @@ static const MenuItem_t MenuItems[] =
         SETTINGS_DURATION_MIN_MS, SETTINGS_DURATION_MAX_MS,
         SETTINGS_DURATION_STEP_MS,
         NULL,           NULL,            MENU_FormatDuration, SETTINGS_Apply, NULL
+    },
+    {
+        "MAX RUN",      MENU_ITEM_UINT,  &Settings.MaxRunTimeS,
+        SETTINGS_MAX_RUN_MIN_S, SETTINGS_MAX_RUN_MAX_S, SETTINGS_MAX_RUN_STEP_S,
+        NULL,           NULL,            MENU_FormatSeconds, SETTINGS_Apply, NULL
+    },
+    {
+        "FREQ WIN",     MENU_ITEM_UINT,  &Settings.FreqDeviationX10,
+        SETTINGS_FREQ_DEV_MIN_X10, SETTINGS_FREQ_DEV_MAX_X10,
+        SETTINGS_FREQ_DEV_STEP_X10,
+        NULL,           NULL,            MENU_FormatFreqWindow, SETTINGS_Apply, NULL
     },
     {
         "CONTROL",      MENU_ITEM_ENUM,  &Settings.ControlMode,

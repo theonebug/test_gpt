@@ -29,6 +29,12 @@ static volatile uint32_t CH2Counter = 0;
 /* Заход в OnZeroCross, когда предыдущий импульс ещё не завершён */
 static volatile uint32_t RestartCounter = 0;
 
+/* Срабатывания сторожа по CH2 (выход остался включён) */
+static volatile uint32_t WatchdogCounter = 0;
+
+/* Запас после расчётного момента выключения, мкс */
+#define TIRISTOR_WATCHDOG_US    200U
+
 /*=============================================================
  * Инициализация
  *=============================================================*/
@@ -126,6 +132,64 @@ uint32_t Tiristor_GetCH2Counter(void)
 uint32_t Tiristor_GetRestartCounter(void)
 {
     return RestartCounter;
+}
+
+uint32_t Tiristor_GetWatchdogCounter(void)
+{
+    return WatchdogCounter;
+}
+
+/*=============================================================
+ * Аварийное гашение выхода
+ *
+ * Без HAL и без предварительной инициализации: вызывается также из
+ * HardFault_Handler и Error_Handler.
+ *=============================================================*/
+
+void Tiristor_EmergencyOff(void)
+{
+    TIM2->CR1  &= ~TIM_CR1_CEN;
+    TIM2->DIER &= ~(TIM_DIER_CC1IE | TIM_DIER_CC2IE);
+
+    TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+}
+
+/*=============================================================
+ * Сторож по CH2: если выключающее сравнение не отработало,
+ * выход гасится из фонового цикла. Счётчики CH1/CH2 не трогаем.
+ *=============================================================*/
+
+void Tiristor_Process(void)
+{
+    uint8_t stuck = 0U;
+
+    /* Выход не включён - контролировать нечего */
+    if((TIRISTOR_OUT_GPIO_Port->ODR & TIRISTOR_OUT_Pin) == 0U)
+    {
+        return;
+    }
+
+    if((TIM2->CR1 & TIM_CR1_CEN) == 0U)
+    {
+        /* Таймер остановлен, а выход всё ещё поднят */
+        stuck = 1U;
+    }
+    else if(TIM2->SR & TIM_SR_UIF)
+    {
+        /* TIM2 успел переполниться (65 мс) с поднятым выходом */
+        stuck = 1U;
+    }
+    else if(TIM2->CNT > (TIM2->CCR2 + TIRISTOR_WATCHDOG_US))
+    {
+        stuck = 1U;
+    }
+
+    if(stuck)
+    {
+        Tiristor_EmergencyOff();
+
+        WatchdogCounter++;
+    }
 }
 
 /*=============================================================

@@ -5,6 +5,7 @@
 #include "main.h"
 #include "tiristor.h"
 #include "device.h"
+#include "sync.h"
 
 /*=============================================================
  * Хранение во Flash
@@ -15,9 +16,16 @@
 #define SETTINGS_FLASH_ADDR   0x0800FC00UL
 #define SETTINGS_MAGIC        0x53455431UL   /* SET1 */
 
+/* Версия структуры Settings_t. Увеличивать при любом изменении
+   состава или смысла полей: старая запись тогда отбрасывается и применяются
+   значения по умолчанию. */
+#define SETTINGS_VERSION      2U
+
 typedef struct
 {
     uint32_t   Magic;
+    uint16_t   Version;
+    uint16_t   Size;
     Settings_t Data;
     uint32_t   Crc;
 
@@ -80,6 +88,14 @@ static uint8_t SETTINGS_CheckRanges(const Settings_t *data)
     if(data->Rs485Parity    >= RS485_PARITY_COUNT)         { return 0U; }
     if(data->Rs485BaudIndex >= SETTINGS_RS485_BAUD_COUNT)  { return 0U; }
 
+    if(!SETTINGS_InRange(data->MaxRunTimeS,
+                         SETTINGS_MAX_RUN_MIN_S,
+                         SETTINGS_MAX_RUN_MAX_S))          { return 0U; }
+
+    if(!SETTINGS_InRange(data->FreqDeviationX10,
+                         SETTINGS_FREQ_DEV_MIN_X10,
+                         SETTINGS_FREQ_DEV_MAX_X10))       { return 0U; }
+
     return 1U;
 }
 
@@ -92,8 +108,10 @@ static uint8_t SETTINGS_Load(void)
     const SettingsStorage_t *storage =
             (const SettingsStorage_t *)SETTINGS_FLASH_ADDR;
 
-    if(storage->Magic != SETTINGS_MAGIC)                      { return 0U; }
-    if(storage->Crc   != SETTINGS_Crc(&storage->Data))        { return 0U; }
+    if(storage->Magic   != SETTINGS_MAGIC)                    { return 0U; }
+    if(storage->Version != SETTINGS_VERSION)                  { return 0U; }
+    if(storage->Size    != (uint16_t)sizeof(Settings_t))      { return 0U; }
+    if(storage->Crc     != SETTINGS_Crc(&storage->Data))      { return 0U; }
     if(!SETTINGS_CheckRanges(&storage->Data))                 { return 0U; }
 
     Settings = storage->Data;
@@ -117,8 +135,10 @@ uint8_t SETTINGS_Save(void)
     const uint16_t *halfword;
     uint32_t i;
 
-    image.Magic = SETTINGS_MAGIC;
-    image.Data  = Settings;
+    image.Magic   = SETTINGS_MAGIC;
+    image.Version = SETTINGS_VERSION;
+    image.Size    = (uint16_t)sizeof(Settings_t);
+    image.Data    = Settings;
     image.Crc   = SETTINGS_Crc(&image.Data);
 
     /* Ничего не изменилось - не трогаем Flash */
@@ -187,6 +207,9 @@ void SETTINGS_SetDefaults(void)
     Settings.Rs485BaudIndex = 0U;      /* 9600 */
     Settings.Rs485Address   = 1U;
     Settings.Rs485Parity    = RS485_PARITY_NONE;
+
+    Settings.MaxRunTimeS      = 10U;
+    Settings.FreqDeviationX10 = 20U;   /* 48.0 ... 52.0 Гц */
 }
 
 /*=============================================================
@@ -204,6 +227,9 @@ void SETTINGS_Apply(void)
                      : TIRISTOR_MODE_ALL);
 
     Device.Remote = (Settings.ControlMode == CONTROL_MODE_REMOTE) ? 1U : 0U;
+
+    SYNC_SetFreqWindow(SETTINGS_FREQ_NOMINAL_X10 - Settings.FreqDeviationX10,
+                       SETTINGS_FREQ_NOMINAL_X10 + Settings.FreqDeviationX10);
 
     /* RS485 применяется при инициализации драйвера UART (пока не реализован) */
 }

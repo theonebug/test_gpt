@@ -78,6 +78,7 @@ void NMI_Handler(void)
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
+   Tiristor_EmergencyOff();
    while (1)
   {
   }
@@ -90,7 +91,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  Tiristor_EmergencyOff();
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {

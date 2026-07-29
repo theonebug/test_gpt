@@ -19,6 +19,15 @@ static volatile uint32_t GlitchCounter = 0;
 #define SYNC_HALF_PERIOD_MIN_US   7000U    // ~70 Гц
 #define SYNC_HALF_PERIOD_MAX_US   12500U   // ~40 Гц
 
+/* Сколько подряд полупериодов вне допуска частоты считаем аварией */
+#define SYNC_BAD_LIMIT            4U
+
+/* Рабочее окно полупериода, задаётся из настроек (SYNC_SetFreqWindow) */
+static volatile uint32_t HalfMinUs = SYNC_HALF_PERIOD_MIN_US;
+static volatile uint32_t HalfMaxUs = SYNC_HALF_PERIOD_MAX_US;
+
+static volatile uint32_t BadCount = 0;
+
 /* Слепое окно после перехода через ноль (защита от дребезга детектора) */
 #define SYNC_BLANKING_US          5000U
 
@@ -84,15 +93,28 @@ void SYNC_EXTI_Handler(void)
         return;
     }
 
-    /* Период обновляем только по правдоподобному измерению (40...70 Гц),
+    /* Период обновляем только по правдоподобному измерению,
        но само событие отрабатываем в любом случае - импульс терять нельзя */
-    if((diff >= SYNC_HALF_PERIOD_MIN_US) && (diff <= SYNC_HALF_PERIOD_MAX_US))
+    if((diff >= HalfMinUs) && (diff <= HalfMaxUs))
     {
         HalfPeriod = diff;
+        BadCount   = 0;
     }
     else
     {
         GlitchCounter++;
+
+        /* Частота ушла за допуск - это авария, а не единичная помеха */
+        if(BadCount < SYNC_BAD_LIMIT)
+        {
+            BadCount++;
+        }
+
+        if(BadCount >= SYNC_BAD_LIMIT)
+        {
+            SyncPresent = 0;
+            return;
+        }
     }
 
     if(HalfPeriod == 0U)
@@ -149,6 +171,18 @@ uint32_t SYNC_GetCounter(void)
 uint32_t SYNC_GetGlitchCounter(void)
 {
     return GlitchCounter;
+}
+
+void SYNC_SetFreqWindow(uint32_t minFreqX10, uint32_t maxFreqX10)
+{
+    if((minFreqX10 == 0U) || (maxFreqX10 <= minFreqX10))
+    {
+        return;
+    }
+
+    /* Полупериод [мкс] = 5 000 000 / частота [0.1 Гц] */
+    HalfMinUs = 5000000UL / maxFreqX10;
+    HalfMaxUs = 5000000UL / minFreqX10;
 }
 
 uint32_t SYNC_GetFrequency_x10(void)

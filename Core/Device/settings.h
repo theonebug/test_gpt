@@ -65,6 +65,18 @@ typedef enum
 #define SETTINGS_RS485_ADDR_MIN         1U
 #define SETTINGS_RS485_ADDR_MAX         247U
 
+/* Аварийный таймаут непрерывного режима, с */
+#define SETTINGS_MAX_RUN_MIN_S          1U
+#define SETTINGS_MAX_RUN_MAX_S          120U
+#define SETTINGS_MAX_RUN_STEP_S         1U
+
+/* Допустимое отклонение частоты сети от 50 Гц, 0.1 Гц */
+#define SETTINGS_FREQ_DEV_MIN_X10       5U
+#define SETTINGS_FREQ_DEV_MAX_X10       100U
+#define SETTINGS_FREQ_DEV_STEP_X10      5U
+
+#define SETTINGS_FREQ_NOMINAL_X10       500U
+
 /*=============================================================
  * Настройки прибора
  *=============================================================*/
@@ -79,6 +91,9 @@ typedef struct
     uint16_t Rs485BaudIndex;    /* индекс в SETTINGS_Rs485BaudTable     */
     uint16_t Rs485Address;      /* адрес в сети                         */
     uint16_t Rs485Parity;       /* Rs485Parity_t                        */
+
+    uint16_t MaxRunTimeS;       /* аварийный таймаут непрерывного режима */
+    uint16_t FreqDeviationX10;  /* допуск частоты сети, 0.1 Гц           */
 
 } Settings_t;
 

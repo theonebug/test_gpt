@@ -138,6 +138,18 @@ uint32_t Device_GetElapsedMs(void)
     return HAL_GetTick() - TestStartTick;
 }
 
+/* Аварийный таймаут: в непрерывном режиме остановка возможна только
+   кнопкой STOP, поэтому ограничиваем время работы сверху */
+static uint8_t Device_MaxRunExpired(void)
+{
+    if(Device.State != DEVICE_TEST)
+    {
+        return 0U;
+    }
+
+    return (Device_GetElapsedMs() >= (Settings.MaxRunTimeS * 1000U)) ? 1U : 0U;
+}
+
 /* Светодиоды отражают состояние устройства, а не нажатия кнопок */
 static void Device_UpdateLeds(void)
 {
@@ -158,6 +170,13 @@ void Device_Update(void)
     /* Потеря синхронизации во время работы - аварийный стоп */
     if(!Device.SyncOK && (Device.State != DEVICE_READY))
     {
+        Device_Stop();
+    }
+
+    if(Device_MaxRunExpired())
+    {
+        Device.State = DEVICE_FINISHED;
+
         Device_Stop();
     }
 
