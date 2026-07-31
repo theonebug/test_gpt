@@ -53,6 +53,10 @@ void Tiristor_Init(void)
                       TIRISTOR_OUT_Pin,
                       GPIO_PIN_RESET);
 
+    HAL_GPIO_WritePin(SYNC_OSC_GPIO_Port,
+                      SYNC_OSC_Pin,
+                      GPIO_PIN_RESET);
+
     HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
     HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_2);
 
@@ -77,6 +81,10 @@ void Tiristor_Stop(void)
 
     HAL_GPIO_WritePin(TIRISTOR_OUT_GPIO_Port,
                       TIRISTOR_OUT_Pin,
+                      GPIO_PIN_RESET);
+
+    HAL_GPIO_WritePin(SYNC_OSC_GPIO_Port,
+                      SYNC_OSC_Pin,
                       GPIO_PIN_RESET);
 }
 
@@ -152,6 +160,7 @@ void Tiristor_EmergencyOff(void)
     TIM2->DIER &= ~(TIM_DIER_CC1IE | TIM_DIER_CC2IE);
 
     TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+    SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
 }
 
 /*=============================================================
@@ -241,6 +250,9 @@ void Tiristor_OnZeroCross(void)
 void Tiristor_Channel1_IRQHandler(void)
 {
     TIRISTOR_OUT_GPIO_Port->BSRR = TIRISTOR_OUT_Pin;
+
+    /* Синхроимпульс для осциллографа идёт одновременно с управляющим */
+    SYNC_OSC_GPIO_Port->BSRR = SYNC_OSC_Pin;
     CH1Counter++;
     if(Tiristor.Mode == TIRISTOR_MODE_FIRST)
     {
@@ -256,6 +268,7 @@ void Tiristor_Channel2_IRQHandler(void)
 {
 
 	TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+	SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
 	TIM2->CR1 &= ~TIM_CR1_CEN;
 	CH2Counter++;
 }

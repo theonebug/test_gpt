@@ -92,6 +92,16 @@ static void TiristorOutput_SafeInit(void)
   HAL_GPIO_Init(TIRISTOR_OUT_GPIO_Port, &init);
 
   TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
+
+  init.Pin = SYNC_OSC_Pin;
+
+  HAL_GPIO_Init(SYNC_OSC_GPIO_Port, &init);
+
+  SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
 }
 
 /* Сторожевой таймер на регистрах (HAL IWDG в проект не включён):
