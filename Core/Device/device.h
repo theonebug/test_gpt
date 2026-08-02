@@ -7,6 +7,10 @@
     Device state machine
 ----------------------------------------------------------*/
 
+/* Допустимый диапазон угла открытия */
+#define DEVICE_ANGLE_MIN    5U
+#define DEVICE_ANGLE_MAX    175U
+
 typedef enum
 {
     DEVICE_READY = 0,
@@ -63,7 +67,13 @@ void Device_Update(void);
 
 uint32_t Device_GetZeroCrossCounter(void);
 
+/* Время с начала текущего запуска, мс */
+uint32_t Device_GetElapsedMs(void);
+
 DeviceState_t Device_GetState(void);
+
+/* 1 - устройство в READY: разрешены угол, меню и настройки */
+uint8_t Device_IsIdle(void);
 
 /*----------------------------------------------------------
     Angle

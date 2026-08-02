@@ -3,8 +3,6 @@
 #include "st7789.h"
 #include "fonts.h"
 
-#include "ok_32.h"
-#include "error_32.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +23,7 @@ typedef struct
 
     uint16_t Duration;
 
-    uint8_t Progress;
+    uint8_t Heartbeat;
 
     char Status[20];
 
@@ -51,6 +49,8 @@ static void LCD_DrawMenu(void);
 static void LCD_DrawSettings(void);
 static void LCD_DrawService(void);
 
+static void LCD_DrawIcon(uint16_t x, uint16_t y, uint8_t ok);
+
 /*==========================================================
     BSP_LCD_Init
 ==========================================================*/
@@ -59,7 +59,7 @@ void BSP_LCD_Init(void)
 {
     ST7789_Init();
 
-    memset(&LCD_State,0xFF,sizeof(LCD_State));
+    BSP_LCD_Invalidate();
 
     CurrentScreen = LCD_SCREEN_SPLASH;
 }
@@ -70,8 +70,22 @@ void BSP_LCD_Init(void)
 
 void BSP_LCD_Clear(void)
 {
+    Watchdog_Refresh();
+
     ST7789_Fill_Color_DMA(
             UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
+    BSP_LCD_Invalidate
+==========================================================*/
+
+void BSP_LCD_Invalidate(void)
+{
+    memset(&LCD_State,0xFF,sizeof(LCD_State));
+
+    /* strcmp() по Status требует завершающего нуля */
+    LCD_State.Status[sizeof(LCD_State.Status)-1] = '\0';
 }
 
 /*==========================================================
@@ -162,12 +176,7 @@ static void LCD_DrawSplash(void)
             UI_COLOR_TITLE,
             UI_COLOR_BACKGROUND);
 
-    ST7789_DrawImage(
-            104,
-            90,
-            32,
-            32,
-            ok_32);
+    LCD_DrawIcon(104, 90, 1U);
 
     ST7789_WriteString(
             82,
@@ -267,7 +276,7 @@ static void LCD_DrawMain(void)
 
     BSP_LCD_UpdateDuration(LCD_State.Duration);
 
-    BSP_LCD_UpdateProgress(LCD_State.Progress);
+    BSP_LCD_UpdateHeartbeat();
 }
 
 /*==========================================================
@@ -370,12 +379,7 @@ void BSP_LCD_UpdateRS485(uint8_t ok)
             32,
             UI_COLOR_BACKGROUND);
 
-    ST7789_DrawImage(
-            190,
-            4,
-            32,
-            32,
-            ok ? ok_32 : error_32);
+    LCD_DrawIcon(190, 4, ok);
 }
 
 /*==========================================================
@@ -398,12 +402,7 @@ void BSP_LCD_UpdateSync(uint8_t ok)
             32,
             UI_COLOR_BACKGROUND);
 
-    ST7789_DrawImage(
-            75,
-            44,
-            32,
-            32,
-            ok ? ok_32 : error_32);
+    LCD_DrawIcon(75, 44, ok);
 }
 
 /*==========================================================
@@ -509,46 +508,140 @@ void BSP_LCD_UpdateDuration(uint16_t ms)
 }
 
 /*==========================================================
+    LCD_DrawIcon
+
+    Иконки рисуются примитивами, а не картинкой: фон всегда совпадает
+    с фоном экрана, цвета задаются в ui_colors.h.
+==========================================================*/
+
+#define LCD_ICON_SIZE     32U
+#define LCD_ICON_RADIUS   15
+
+static void LCD_FillCircle(int16_t cx, int16_t cy, int16_t r, uint16_t color)
+{
+    int16_t dy;
+
+    for(dy = -r; dy <= r; dy++)
+    {
+        int16_t dx = 0;
+
+        while((dx * dx + dy * dy) <= (r * r))
+        {
+            dx++;
+        }
+
+        dx--;
+
+        ST7789_FillRectangle((uint16_t)(cx - dx),
+                             (uint16_t)(cy + dy),
+                             (uint16_t)(2 * dx + 1),
+                             1U,
+                             color);
+    }
+}
+
+/* Толстая линия из нескольких смежных отрезков */
+static void LCD_DrawThickLine(int16_t x0, int16_t y0,
+                              int16_t x1, int16_t y1,
+                              uint16_t color)
+{
+    int16_t i;
+
+    for(i = -1; i <= 1; i++)
+    {
+        ST7789_DrawLine((uint16_t)(x0 + i), (uint16_t)y0,
+                        (uint16_t)(x1 + i), (uint16_t)y1, color);
+
+        ST7789_DrawLine((uint16_t)x0, (uint16_t)(y0 + i),
+                        (uint16_t)x1, (uint16_t)(y1 + i), color);
+    }
+}
+
+static void LCD_DrawIcon(uint16_t x, uint16_t y, uint8_t ok)
+{
+    const int16_t cx = (int16_t)x + (LCD_ICON_SIZE / 2);
+    const int16_t cy = (int16_t)y + (LCD_ICON_SIZE / 2);
+
+    ST7789_FillRectangle(x, y, LCD_ICON_SIZE, LCD_ICON_SIZE,
+                         UI_COLOR_BACKGROUND);
+
+    LCD_FillCircle(cx, cy, LCD_ICON_RADIUS,
+                   ok ? UI_COLOR_ICON_OK : UI_COLOR_ICON_ERROR);
+
+    if(ok)
+    {
+        /* Галочка */
+        LCD_DrawThickLine(cx - 7, cy,     cx - 2, cy + 6, UI_COLOR_ICON_GLYPH);
+        LCD_DrawThickLine(cx - 2, cy + 6, cx + 7, cy - 6, UI_COLOR_ICON_GLYPH);
+    }
+    else
+    {
+        /* Крест */
+        LCD_DrawThickLine(cx - 6, cy - 6, cx + 6, cy + 6, UI_COLOR_ICON_GLYPH);
+        LCD_DrawThickLine(cx + 6, cy - 6, cx - 6, cy + 6, UI_COLOR_ICON_GLYPH);
+    }
+}
+
+/*==========================================================
+    BSP_LCD_UpdateDebug
+
+    S - переходы через ноль, G - отбракованные (помеха),
+    C - импульсы CH1, R - перезапуски до конца импульса (всё за 1 с)
+==========================================================*/
+
+void BSP_LCD_UpdateDebug(uint16_t sync,
+                         uint16_t glitch,
+                         uint16_t pulses,
+                         uint16_t restarts,
+                         uint16_t watchdog)
+{
+    char text[48];
+
+    sprintf(text,"S%u G%u C%u R%u W%u",sync,glitch,pulses,restarts,watchdog);
+
+    ST7789_FillRectangle(
+            10,
+            262,
+            220,
+            12,
+            UI_COLOR_BACKGROUND);
+
+    ST7789_WriteString(
+            10,
+            263,
+            text,
+            Font_7x10,
+            UI_COLOR_LABEL,
+            UI_COLOR_BACKGROUND);
+}
+
+/*==========================================================
     BSP_LCD_UpdateProgress
 ==========================================================*/
 
-void BSP_LCD_UpdateProgress(uint8_t percent)
+/*==========================================================
+    BSP_LCD_UpdateHeartbeat
+
+    Вращающийся индикатор: показывает, что главный цикл жив.
+==========================================================*/
+
+void BSP_LCD_UpdateHeartbeat(void)
 {
-    uint16_t width;
+    static const char Frames[] = { '|', '/', '-', '\\' };
 
-    if(percent > 100)
-    {
-        percent = 100;
-    }
+    char text[2];
 
-    if(LCD_State.Progress == percent)
-    {
-        return;
-    }
+    LCD_State.Heartbeat = (uint8_t)((LCD_State.Heartbeat + 1U) & 0x03U);
 
-    LCD_State.Progress = percent;
+    text[0] = Frames[LCD_State.Heartbeat];
+    text[1] = '\0';
 
-    width = (200 * percent) / 100;
-
-    ST7789_DrawRectangle(
-            18,
+    ST7789_WriteString(
+            112,
             282,
-            204,
-            18,
-            UI_COLOR_BORDER);
-
-    ST7789_FillRectangle(
-            20,
-            284,
-            200,
-            14,
+            text,
+            Font_16x26,
+            UI_COLOR_VALUE,
             UI_COLOR_BACKGROUND);
-
-    ST7789_FillRectangle(
-            20,
-            284,
-            width,
-            14,
-            UI_COLOR_OK);
 }
 

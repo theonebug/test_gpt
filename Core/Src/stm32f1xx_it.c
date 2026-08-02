@@ -25,6 +25,7 @@
 #include "tiristor.h"
 #include "bsp_button.h"
 #include "bsp_encoder.h"
+#include "modbus.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -78,6 +79,7 @@ void NMI_Handler(void)
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
+   Tiristor_EmergencyOff();
    while (1)
   {
   }
@@ -90,7 +92,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  Tiristor_EmergencyOff();
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -260,6 +262,16 @@ void TIM2_IRQHandler(void)
 	      TIM2->SR = ~TIM_FLAG_CC2; // Сбрасываем флаг в конце обработчика
 	  }
   /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART2 global interrupt (Modbus RTU).
+  */
+void USART2_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART2_IRQn 0 */
+  MODBUS_RxIRQHandler();
+  /* USER CODE END USART2_IRQn 0 */
 }
 
 /**

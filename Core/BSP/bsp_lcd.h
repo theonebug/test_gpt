@@ -23,6 +23,9 @@ void BSP_LCD_Init(void);
 
 void BSP_LCD_Clear(void);
 
+/* Сбросить кэш отрисованных значений (форсировать перерисовку полей) */
+void BSP_LCD_Invalidate(void);
+
 /*----------------------------------------------------------
     Screen manager
 ----------------------------------------------------------*/
@@ -50,6 +53,14 @@ void BSP_LCD_UpdateStatus(const char *text,
 
 void BSP_LCD_UpdateDuration(uint16_t ms);
 
-void BSP_LCD_UpdateProgress(uint8_t percent);
+/* Вращающийся индикатор работоспособности */
+void BSP_LCD_UpdateHeartbeat(void);
+
+/* Строка диагностики: события за последнюю секунду */
+void BSP_LCD_UpdateDebug(uint16_t sync,
+                         uint16_t glitch,
+                         uint16_t pulses,
+                         uint16_t restarts,
+                         uint16_t watchdog);
 
 #endif

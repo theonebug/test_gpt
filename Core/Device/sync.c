@@ -19,6 +19,18 @@ static volatile uint32_t GlitchCounter = 0;
 #define SYNC_HALF_PERIOD_MIN_US   7000U    // ~70 Гц
 #define SYNC_HALF_PERIOD_MAX_US   12500U   // ~40 Гц
 
+/* Сколько подряд полупериодов вне допуска частоты считаем аварией */
+#define SYNC_BAD_LIMIT            4U
+
+/* Рабочее окно полупериода, задаётся из настроек (SYNC_SetFreqWindow) */
+static volatile uint32_t HalfMinUs = SYNC_HALF_PERIOD_MIN_US;
+static volatile uint32_t HalfMaxUs = SYNC_HALF_PERIOD_MAX_US;
+
+static volatile uint32_t BadCount = 0;
+
+/* Слепое окно после перехода через ноль (защита от дребезга детектора) */
+#define SYNC_BLANKING_US          5000U
+
 /*----------------------------------------------------------
     Initialization
 ----------------------------------------------------------*/
@@ -61,50 +73,61 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void SYNC_EXTI_Handler(void)
 {
-    uint32_t now;
-    uint32_t currentOverflows;
-    uint64_t currentTime;
-    static uint64_t lastTime = 0; // Делаем переменную статической для сохранения между вызовами
-    uint64_t diff;
+    static uint16_t lastCapture = 0;
 
-    // Атомарное чтение текущего счётчика и переполнений.
-    // EXTI имеет более высокий приоритет, чем TIM3_IRQn, поэтому мы можем
-    // попасть сюда после переполнения TIM3, но до того как отработал его
-    // обработчик и инкрементировал LastOverflows. Учитываем это по флагу UIF.
-    __disable_irq();
-    now = __HAL_TIM_GET_COUNTER(&htim3);
-    currentOverflows = LastOverflows;
-    if ((htim3.Instance->SR & TIM_SR_UIF) && (now < 0x8000U))
+    uint16_t now;
+    uint16_t diff;
+
+    /* TIM3 тикает по 1 мкс и переполняется каждые 65536 мкс. Полупериод
+       (10 мс) сильно меньше этого, поэтому разность в 16 битах всегда верна
+       сама по себе - счётчик переполнений и гонка с TIM3_IRQn больше не нужны. */
+    now  = (uint16_t)__HAL_TIM_GET_COUNTER(&htim3);
+    diff = (uint16_t)(now - lastCapture);
+
+    lastCapture = now;
+
+    /* Слишком близкое срабатывание - дребезг детектора, игнорируем событие */
+    if(diff < SYNC_BLANKING_US)
     {
-        currentOverflows++;
+        GlitchCounter++;
+        return;
     }
-    __enable_irq();
 
-    // Вычисляем текущее 64-битное время
-    currentTime = ((uint64_t)currentOverflows << 16) | now;
-
-    // Считаем разницу (при первом запуске diff может быть некорректным, это нормально)
-    diff = currentTime - lastTime;
-
-    // Сохраняем текущее время для следующего прерывания
-    lastTime = currentTime;
-
-    // Принимаем только правдоподобный полупериод (40...70 Гц), остальное - помеха
-    if ((diff >= SYNC_HALF_PERIOD_MIN_US) && (diff <= SYNC_HALF_PERIOD_MAX_US))
+    /* Период обновляем только по правдоподобному измерению,
+       но само событие отрабатываем в любом случае - импульс терять нельзя */
+    if((diff >= HalfMinUs) && (diff <= HalfMaxUs))
     {
-        HalfPeriod = (uint32_t)diff;
-
-        // Обновляем остальные флаги
-        LastPulseTick = HAL_GetTick();
-        SyncCounter++;
-        SyncPresent = 1;
-
-        Device_OnZeroCross();
+        HalfPeriod = diff;
+        BadCount   = 0;
     }
     else
     {
         GlitchCounter++;
+
+        /* Частота ушла за допуск - это авария, а не единичная помеха */
+        if(BadCount < SYNC_BAD_LIMIT)
+        {
+            BadCount++;
+        }
+
+        if(BadCount >= SYNC_BAD_LIMIT)
+        {
+            SyncPresent = 0;
+            return;
+        }
     }
+
+    if(HalfPeriod == 0U)
+    {
+        /* Ещё ни одного достоверного измерения */
+        return;
+    }
+
+    LastPulseTick = HAL_GetTick();
+    SyncCounter++;
+    SyncPresent = 1;
+
+    Device_OnZeroCross();
 }
 
 /*----------------------------------------------------------
@@ -148,6 +171,18 @@ uint32_t SYNC_GetCounter(void)
 uint32_t SYNC_GetGlitchCounter(void)
 {
     return GlitchCounter;
+}
+
+void SYNC_SetFreqWindow(uint32_t minFreqX10, uint32_t maxFreqX10)
+{
+    if((minFreqX10 == 0U) || (maxFreqX10 <= minFreqX10))
+    {
+        return;
+    }
+
+    /* Полупериод [мкс] = 5 000 000 / частота [0.1 Гц] */
+    HalfMinUs = 5000000UL / maxFreqX10;
+    HalfMaxUs = 5000000UL / minFreqX10;
 }
 
 uint32_t SYNC_GetFrequency_x10(void)

@@ -41,6 +41,10 @@ uint16_t Tiristor_GetDelayUs(void);
 void Tiristor_SetPulseWidthUs(uint16_t width);
 uint16_t Tiristor_GetPulseWidthUs(void);
 
+/* Компенсация опережения сигнала детектора нуля, мкс */
+void Tiristor_SetZeroCrossOffsetUs(uint16_t offset);
+uint16_t Tiristor_GetZeroCrossOffsetUs(void);
+
 /*=============================================================
  * Событие перехода через ноль
  *=============================================================*/
@@ -54,6 +58,14 @@ void Tiristor_Channel2_IRQHandler(void);
 
 uint32_t Tiristor_GetCH1Counter(void);
 uint32_t Tiristor_GetCH2Counter(void);
+uint32_t Tiristor_GetRestartCounter(void);
+uint32_t Tiristor_GetWatchdogCounter(void);
+
+/* Немедленное гашение выхода, безопасно вызывать из любого контекста */
+void Tiristor_EmergencyOff(void);
+
+/* Сторож по CH2, вызывать из фонового цикла */
+void Tiristor_Process(void);
 
 #ifdef __cplusplus
 }
