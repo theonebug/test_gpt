@@ -77,6 +77,12 @@ typedef enum
 
 #define SETTINGS_FREQ_NOMINAL_X10       500U
 
+/* Калибровка: насколько сигнал детектора опережает
+   реальный переход через ноль, мкс */
+#define SETTINGS_ZC_OFFSET_MIN_US       0U
+#define SETTINGS_ZC_OFFSET_MAX_US       5000U
+#define SETTINGS_ZC_OFFSET_STEP_US      10U
+
 /*=============================================================
  * Настройки прибора
  *=============================================================*/
@@ -94,6 +100,7 @@ typedef struct
 
     uint16_t MaxRunTimeS;       /* аварийный таймаут непрерывного режима */
     uint16_t FreqDeviationX10;  /* допуск частоты сети, 0.1 Гц           */
+    uint16_t ZeroCrossOffsetUs; /* опережение детектора нуля, мкс   */
 
 } Settings_t;
 

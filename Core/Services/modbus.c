@@ -172,6 +172,7 @@ static uint16_t MODBUS_ReadHolding(uint16_t address)
         case 7U:  return Settings.Rs485BaudIndex;
         case 8U:  return Settings.Rs485Address;
         case 9U:  return Settings.Rs485Parity;
+        case 11U: return Settings.ZeroCrossOffsetUs;
         default:  return 0U;
     }
 }
@@ -330,6 +331,18 @@ static uint8_t MODBUS_WriteHolding(uint16_t address, uint16_t value)
             if(value >= RS485_PARITY_COUNT) { return MODBUS_EX_ILLEGAL_VALUE; }
 
             Settings.Rs485Parity = value;
+            break;
+
+        case 11U:
+
+            if(!MODBUS_InRange(value,
+                               SETTINGS_ZC_OFFSET_MIN_US,
+                               SETTINGS_ZC_OFFSET_MAX_US))
+            {
+                return MODBUS_EX_ILLEGAL_VALUE;
+            }
+
+            Settings.ZeroCrossOffsetUs = value;
             break;
 
         case 10U:

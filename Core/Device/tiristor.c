@@ -16,6 +16,9 @@ typedef struct
     uint16_t DelayUs;
     uint16_t PulseWidthUs;
 
+    /* Опережение сигнала детектора нуля, мкс */
+    uint16_t ZeroCrossOffsetUs;
+
 } TiristorControl_t;
 
 static TiristorControl_t Tiristor;
@@ -127,6 +130,16 @@ uint16_t Tiristor_GetPulseWidthUs(void)
     return Tiristor.PulseWidthUs;
 }
 
+void Tiristor_SetZeroCrossOffsetUs(uint16_t offset)
+{
+    Tiristor.ZeroCrossOffsetUs = offset;
+}
+
+uint16_t Tiristor_GetZeroCrossOffsetUs(void)
+{
+    return Tiristor.ZeroCrossOffsetUs;
+}
+
 uint32_t Tiristor_GetCH1Counter(void)
 {
     return CH1Counter;
@@ -216,7 +229,11 @@ void Tiristor_OnZeroCross(void)
     if(halfPeriod <= (pulseWidth + TIRISTOR_GUARD_US)) { return; }
 
     uint32_t max_delay = halfPeriod - pulseWidth - TIRISTOR_GUARD_US;
-    uint32_t delay = (halfPeriod * Device_GetAngle()) / 180U;
+
+    /* Сигнал детектора приходит раньше реального перехода через ноль:
+       угол отсчитывается от реального нуля */
+    uint32_t delay = Tiristor.ZeroCrossOffsetUs
+                   + ((halfPeriod * Device_GetAngle()) / 180U);
 
     if(delay < TIRISTOR_MIN_DELAY_US) { delay = TIRISTOR_MIN_DELAY_US; }
     if(delay > max_delay)             { delay = max_delay; }

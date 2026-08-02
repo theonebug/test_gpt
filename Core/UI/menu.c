@@ -125,6 +125,12 @@ static const MenuItem_t MenuItems[] =
         NULL,           NULL,            MENU_FormatFreqWindow, SETTINGS_Apply, NULL
     },
     {
+        "CALIB",        MENU_ITEM_UINT,  &Settings.ZeroCrossOffsetUs,
+        SETTINGS_ZC_OFFSET_MIN_US, SETTINGS_ZC_OFFSET_MAX_US,
+        SETTINGS_ZC_OFFSET_STEP_US,
+        "us",           NULL,            NULL, SETTINGS_Apply, NULL
+    },
+    {
         "CONTROL",      MENU_ITEM_ENUM,  &Settings.ControlMode,
         0U, CONTROL_MODE_COUNT - 1U, 1U,
         NULL,           MENU_ControlNames, NULL, SETTINGS_Apply, NULL

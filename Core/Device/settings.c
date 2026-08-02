@@ -20,7 +20,7 @@
 /* Версия структуры Settings_t. Увеличивать при любом изменении
    состава или смысла полей: старая запись тогда отбрасывается и применяются
    значения по умолчанию. */
-#define SETTINGS_VERSION      2U
+#define SETTINGS_VERSION      3U
 
 typedef struct
 {
@@ -96,6 +96,10 @@ static uint8_t SETTINGS_CheckRanges(const Settings_t *data)
     if(!SETTINGS_InRange(data->FreqDeviationX10,
                          SETTINGS_FREQ_DEV_MIN_X10,
                          SETTINGS_FREQ_DEV_MAX_X10))       { return 0U; }
+
+    if(!SETTINGS_InRange(data->ZeroCrossOffsetUs,
+                         SETTINGS_ZC_OFFSET_MIN_US,
+                         SETTINGS_ZC_OFFSET_MAX_US))       { return 0U; }
 
     return 1U;
 }
@@ -211,6 +215,7 @@ void SETTINGS_SetDefaults(void)
 
     Settings.MaxRunTimeS      = 10U;
     Settings.FreqDeviationX10 = 20U;   /* 48.0 ... 52.0 Гц */
+    Settings.ZeroCrossOffsetUs = 0U;
 }
 
 /*=============================================================
@@ -220,6 +225,7 @@ void SETTINGS_SetDefaults(void)
 void SETTINGS_Apply(void)
 {
     Tiristor_SetPulseWidthUs(Settings.PulseWidthUs);
+    Tiristor_SetZeroCrossOffsetUs(Settings.ZeroCrossOffsetUs);
 
     /* В режиме FIRST_WAVE импульс формируется только на первой полуволне,
        остальные полуволны тиристор не трогает - этим управляет device.c */

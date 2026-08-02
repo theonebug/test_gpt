@@ -39,7 +39,7 @@ extern "C" {
  *   12 версия прошивки
  *=============================================================*/
 
-#define MODBUS_HOLDING_COUNT    11U
+#define MODBUS_HOLDING_COUNT    12U
 #define MODBUS_INPUT_COUNT      13U
 
 #define MODBUS_CMD_START        1U

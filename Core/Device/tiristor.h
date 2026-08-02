@@ -41,6 +41,10 @@ uint16_t Tiristor_GetDelayUs(void);
 void Tiristor_SetPulseWidthUs(uint16_t width);
 uint16_t Tiristor_GetPulseWidthUs(void);
 
+/* Компенсация опережения сигнала детектора нуля, мкс */
+void Tiristor_SetZeroCrossOffsetUs(uint16_t offset);
+uint16_t Tiristor_GetZeroCrossOffsetUs(void);
+
 /*=============================================================
  * Событие перехода через ноль
  *=============================================================*/
