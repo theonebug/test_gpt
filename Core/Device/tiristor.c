@@ -13,6 +13,9 @@ typedef struct
     uint8_t Active;
     TiristorMode_t Mode;
 
+    /* TRUE - открывать тиристор сразу после нуля (волна без искажений) */
+    uint8_t PassThrough;
+
     uint16_t DelayUs;
     uint16_t PulseWidthUs;
 
@@ -47,6 +50,8 @@ void Tiristor_Init(void)
     Tiristor.Active = 0;
 
     Tiristor.Mode = TIRISTOR_MODE_FIRST;
+
+    Tiristor.PassThrough = 0;
 
     Tiristor.DelayUs = 0;
 
@@ -108,6 +113,16 @@ void Tiristor_SetMode(TiristorMode_t mode)
 TiristorMode_t Tiristor_GetMode(void)
 {
     return Tiristor.Mode;
+}
+
+void Tiristor_SetPassThrough(uint8_t pass)
+{
+    Tiristor.PassThrough = (pass != 0U) ? 1U : 0U;
+}
+
+uint8_t Tiristor_GetPassThrough(void)
+{
+    return Tiristor.PassThrough;
 }
 
 void Tiristor_SetDelayUs(uint16_t delay)
@@ -231,9 +246,13 @@ void Tiristor_OnZeroCross(void)
     uint32_t max_delay = halfPeriod - pulseWidth - TIRISTOR_GUARD_US;
 
     /* Сигнал детектора приходит раньше реального перехода через ноль:
-       угол отсчитывается от реального нуля */
+       угол отсчитывается от реального нуля.
+       В режиме пропускания (PassThrough) тиристор открывается сразу после
+       перехода через ноль, чтобы волна прошла без среза по углу. */
     uint32_t delay = Tiristor.ZeroCrossOffsetUs
-                   + ((halfPeriod * Device_GetAngle()) / 180U);
+                   + (Tiristor.PassThrough
+                      ? TIRISTOR_MIN_DELAY_US
+                      : ((halfPeriod * Device_GetAngle()) / 180U));
 
     if(delay < TIRISTOR_MIN_DELAY_US) { delay = TIRISTOR_MIN_DELAY_US; }
     if(delay > max_delay)             { delay = max_delay; }
@@ -271,7 +290,7 @@ void Tiristor_Channel1_IRQHandler(void)
     /* Синхроимпульс для осциллографа идёт одновременно с управляющим */
     SYNC_OSC_GPIO_Port->BSRR = SYNC_OSC_Pin;
     CH1Counter++;
-    if(Tiristor.Mode == TIRISTOR_MODE_FIRST)
+    if((Tiristor.Mode == TIRISTOR_MODE_FIRST) && !Tiristor.PassThrough)
     {
         htim2.Instance->DIER &= ~TIM_DIER_CC1IE;
     }

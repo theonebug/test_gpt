@@ -110,13 +110,16 @@ void Device_OnZeroCross(void)
 
     if(Device.State == DEVICE_TEST)
     {
-        /* WORK_MODE_FIRST_WAVE: срезается только первая полуволна,
-           остальные идут без искажений до конца заданного времени */
-        if((Settings.WorkMode != WORK_MODE_FIRST_WAVE) ||
-           (TestHalfWaves == 0U))
-        {
-            Tiristor_OnZeroCross();
-        }
+        /* WORK_MODE_FIRST_WAVE: 1-я полуволна срезается под углом,
+           а последующие пропускаются без искажений. Тиристор запирается
+           на каждом переходе через ноль, поэтому чтобы ток шёл дальше,
+           его нужно вновь открывать сразу после нуля (PassThrough). */
+        Tiristor_SetPassThrough((Settings.WorkMode == WORK_MODE_FIRST_WAVE) &&
+                                (TestHalfWaves != 0U));
+
+        /* Импульс подаётся на каждой полуволне; в FIRST WAVE поведение
+           зависит от PassThrough, в остальных режимах - всегда срез по углу. */
+        Tiristor_OnZeroCross();
 
         TestHalfWaves++;
         ZeroCrossCounter++;

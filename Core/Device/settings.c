@@ -227,8 +227,10 @@ void SETTINGS_Apply(void)
     Tiristor_SetPulseWidthUs(Settings.PulseWidthUs);
     Tiristor_SetZeroCrossOffsetUs(Settings.ZeroCrossOffsetUs);
 
-    /* В режиме FIRST_WAVE импульс формируется только на первой полуволне,
-       остальные полуволны тиристор не трогает - этим управляет device.c */
+    /* В режиме FIRST_WAVE импульс формируется на каждой полуволне:
+       1-я срезается под углом, остальные открывают тиристор сразу после нуля
+       (волны проходят без искажений). Этим управляет device.c + PassThrough.
+       TIRISTOR_MODE_FIRST оставляем как страховку для первой (срезаемой) волны. */
     Tiristor_SetMode((Settings.WorkMode == WORK_MODE_FIRST_WAVE)
                      ? TIRISTOR_MODE_FIRST
                      : TIRISTOR_MODE_ALL);
