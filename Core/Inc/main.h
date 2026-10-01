@@ -53,6 +53,8 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+/* Обновление сторожевого таймера внутри длительных операций (отрисовка экрана) */
+void Watchdog_Refresh(void);
 
 /* USER CODE END EFP */
 
