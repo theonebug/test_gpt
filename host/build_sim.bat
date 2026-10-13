@@ -28,7 +28,7 @@ if errorlevel 1 (
 echo OK - firstwave_test.exe
 echo.
 echo === Запуск ===
-"firstwave_test.exe"
+"%~dp0firstwave_test.exe"
 set RC=%ERRORLEVEL%
 echo.
 exit /b %RC%

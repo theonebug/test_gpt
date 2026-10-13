@@ -173,6 +173,7 @@ static uint16_t MODBUS_ReadHolding(uint16_t address)
         case 8U:  return Settings.Rs485Address;
         case 9U:  return Settings.Rs485Parity;
         case 11U: return Settings.ZeroCrossOffsetUs;
+        case 12U: return Settings.PassMinDelayUs;
         default:  return 0U;
     }
 }
@@ -343,6 +344,18 @@ static uint8_t MODBUS_WriteHolding(uint16_t address, uint16_t value)
             }
 
             Settings.ZeroCrossOffsetUs = value;
+            break;
+
+        case 12U:
+
+            if(!MODBUS_InRange(value,
+                               SETTINGS_PASS_MIN_DELAY_MIN_US,
+                               SETTINGS_PASS_MIN_DELAY_MAX_US))
+            {
+                return MODBUS_EX_ILLEGAL_VALUE;
+            }
+
+            Settings.PassMinDelayUs = value;
             break;
 
         case 10U:

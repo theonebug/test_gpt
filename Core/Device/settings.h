@@ -83,6 +83,12 @@ typedef enum
 #define SETTINGS_ZC_OFFSET_MAX_US       5000U
 #define SETTINGS_ZC_OFFSET_STEP_US      10U
 
+/* Минимальная задержка открытия тиристора для проходных полуволн
+   (PassThrough в режиме WORK_MODE_FIRST_WAVE), мкс */
+#define SETTINGS_PASS_MIN_DELAY_MIN_US  50U
+#define SETTINGS_PASS_MIN_DELAY_MAX_US  500U
+#define SETTINGS_PASS_MIN_DELAY_STEP_US 10U
+
 /*=============================================================
  * Настройки прибора
  *=============================================================*/
@@ -101,6 +107,7 @@ typedef struct
     uint16_t MaxRunTimeS;       /* аварийный таймаут непрерывного режима */
     uint16_t FreqDeviationX10;  /* допуск частоты сети, 0.1 Гц           */
     uint16_t ZeroCrossOffsetUs; /* опережение детектора нуля, мкс   */
+    uint16_t PassMinDelayUs;    /* мин. задержка проходных полуволн, мкс */
 
 } Settings_t;
 

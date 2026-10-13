@@ -22,11 +22,25 @@ typedef enum
     GPIO_PIN_SET
 } GPIO_PinState;
 
-/* Номера пинов (0..15) - согласовано с main.h проекта */
-enum { GPIO_PIN_0 = 0, GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_3, GPIO_PIN_4,
-       GPIO_PIN_5, GPIO_PIN_6, GPIO_PIN_7, GPIO_PIN_8, GPIO_PIN_9,
-       GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14,
-       GPIO_PIN_15 };
+/* Номера пинов - как в реальном HAL STM32F1xx: это МАСКИ, а не порядковые
+   номера. Нужно, чтобы код прибора писал в BSRR/BRR/Odr напрямую
+   (например Tiristor_Channel1_IRQHandler), работал корректно. */
+#define GPIO_PIN_0                 ((uint16_t)0x0001)
+#define GPIO_PIN_1                 ((uint16_t)0x0002)
+#define GPIO_PIN_2                 ((uint16_t)0x0004)
+#define GPIO_PIN_3                 ((uint16_t)0x0008)
+#define GPIO_PIN_4                 ((uint16_t)0x0010)
+#define GPIO_PIN_5                 ((uint16_t)0x0020)
+#define GPIO_PIN_6                 ((uint16_t)0x0040)
+#define GPIO_PIN_7                 ((uint16_t)0x0080)
+#define GPIO_PIN_8                 ((uint16_t)0x0100)
+#define GPIO_PIN_9                 ((uint16_t)0x0200)
+#define GPIO_PIN_10                ((uint16_t)0x0400)
+#define GPIO_PIN_11                ((uint16_t)0x0800)
+#define GPIO_PIN_12                ((uint16_t)0x1000)
+#define GPIO_PIN_13                ((uint16_t)0x2000)
+#define GPIO_PIN_14                ((uint16_t)0x4000)
+#define GPIO_PIN_15                ((uint16_t)0x8000)
 
 /* "Железный" объект GPIO-порта; используются поля, к которым реальный код
    обращается напрямую через стрелку: ODR (выходные), BSRR/BRR (вкл/выкл). */
@@ -112,9 +126,15 @@ void HAL_TIM_OC_Stop_IT(TIM_HandleTypeDef *htim, uint32_t channel);
 #define __HAL_TIM_GET_COUNTER(htim)        ((htim)->Instance->CNT)
 
 /*=============================================================
- * Обработчики сравнения TIM2, вызываемые симулятором тактов
+ * Эмуляция срабатывания каналов сравнения TIM2: вызываются РЕАЛЬНЫЕ
+ * обработчики из Core/Device/tiristor.c (Tiristor_Channel1/2_IRQHandler),
+ * затем записанные в BSRR/BRR значения применяются к ODR так, как это
+ * делает настоящий блок GPIO (HOST_Mock_FireChannel1/2 делают это сами).
  *=============================================================*/
-void TIM2_CH1_handler(void);
-void TIM2_CH2_handler(void);
+void HOST_Mock_FireChannel1(void);
+void HOST_Mock_FireChannel2(void);
+
+/* Применить накопленные записи BSRR/BRR ко всем mock-портам */
+void HOST_Mock_ApplyGpio(void);
 
 #endif /* STM32F1XX_HAL_H */

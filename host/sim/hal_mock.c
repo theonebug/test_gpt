@@ -36,15 +36,18 @@ uint32_t HAL_GetTick(void)           { return MockTick; }
 
 /*=============================================================
  * GPIO
+ *
+ * BSRR/BRR в реальном GPIO не являются регистрами состояния: запись в них
+ * немедленно меняет ODR. Здесь это эмулируется отложенно функцией
+ * HOST_Mock_ApplyGpio() (вызывается тестом после обработчиков каналов).
  *=============================================================*/
 static void gpio_write(GPIO_TypeDef *port, uint32_t pin,
                        GPIO_PinState state)
 {
-    uint32_t mask = (1U << pin);
     if(state == GPIO_PIN_SET)
-        port->ODR |= mask;
+        port->ODR |= pin;        /* pin - маска, как в реальном HAL */
     else
-        port->ODR &= ~mask;
+        port->ODR &= ~pin;
 }
 
 void HAL_GPIO_WritePin(GPIO_TypeDef *port, uint32_t pin, GPIO_PinState state)
@@ -66,28 +69,40 @@ void HAL_TIM_OC_Stop_IT(TIM_HandleTypeDef *htim, uint32_t channel)
 }
 
 /*=============================================================
- * Обработчики сравнения TIM2 (отражают реальные функции прибора).
- * Мне нужны только счётчики открытий, чтобы тест мог проверить,
- * срезается ли волна (открытие) и сколько раз.
+ * Эмуляция срабатывания каналов сравнения TIM2.
+ *
+ * Вызываются РЕАЛЬНЫЕ обработчики прибора (Core/Device/tiristor.c):
+ * они пишут в BSRR/BRR (как на настоящем железе), после чего
+ * HOST_Mock_ApplyGpio() переносит эти записи в ODR.
  *=============================================================*/
-static uint32_t HostCH1Count = 0U;
-static uint32_t HostCH2Count = 0U;
-void HOST_Mock_ResetCounters(void)   { HostCH1Count = HostCH2Count = 0U; }
-uint32_t HOST_Mock_GetCH1Count(void){ return HostCH1Count; }
-uint32_t HOST_Mock_GetCH2Count(void){ return HostCH2Count; }
+void HOST_Mock_ApplyGpio(void)
+{
+    GPIOC_obj.ODR |=  GPIOC_obj.BSRR;
+    GPIOC_obj.ODR &= ~GPIOC_obj.BRR;
+    GPIOC_obj.BSRR = 0U;
+    GPIOC_obj.BRR  = 0U;
 
-/* Вызовы обработчиков каналов тиристора - фактическая реализация из
-   tiristor.c, но здесь мы лишь правильно эмулируем сам факт открытия. */
-void TIM2_CH1_handler(void)
-{
-    HostCH1Count++;
-    GPIOC_obj.ODR |= (1U << TIRISTOR_OUT_Pin);
+    GPIOA_obj.ODR |=  GPIOA_obj.BSRR;
+    GPIOA_obj.ODR &= ~GPIOA_obj.BRR;
+    GPIOA_obj.BSRR = 0U;
+    GPIOA_obj.BRR  = 0U;
+
+    GPIOB_obj.ODR |=  GPIOB_obj.BSRR;
+    GPIOB_obj.ODR &= ~GPIOB_obj.BRR;
+    GPIOB_obj.BSRR = 0U;
+    GPIOB_obj.BRR  = 0U;
 }
-void TIM2_CH2_handler(void)
+
+void HOST_Mock_FireChannel1(void)
 {
-    HostCH2Count++;
-    GPIOC_obj.ODR &= ~(1U << TIRISTOR_OUT_Pin);
-    TIM2_.CR1 &= ~TIM_CR1_CEN;
+    Tiristor_Channel1_IRQHandler();
+    HOST_Mock_ApplyGpio();
+}
+
+void HOST_Mock_FireChannel2(void)
+{
+    Tiristor_Channel2_IRQHandler();
+    HOST_Mock_ApplyGpio();
 }
 
 /*=============================================================

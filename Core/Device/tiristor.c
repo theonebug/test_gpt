@@ -22,6 +22,9 @@ typedef struct
     /* Опережение сигнала детектора нуля, мкс */
     uint16_t ZeroCrossOffsetUs;
 
+    /* Минимальная задержка открытия для проходных полуволн (PassThrough), мкс */
+    uint16_t PassMinDelayUs;
+
 } TiristorControl_t;
 
 static TiristorControl_t Tiristor;
@@ -56,6 +59,9 @@ void Tiristor_Init(void)
     Tiristor.DelayUs = 0;
 
     Tiristor.PulseWidthUs = 100;
+
+    /* Значение по умолчанию совпадает с SETTINGS_SetDefaults() */
+    Tiristor.PassMinDelayUs = 50U;
 
     HAL_GPIO_WritePin(TIRISTOR_OUT_GPIO_Port,
                       TIRISTOR_OUT_Pin,
@@ -155,6 +161,16 @@ uint16_t Tiristor_GetZeroCrossOffsetUs(void)
     return Tiristor.ZeroCrossOffsetUs;
 }
 
+void Tiristor_SetPassMinDelayUs(uint16_t delay)
+{
+    Tiristor.PassMinDelayUs = delay;
+}
+
+uint16_t Tiristor_GetPassMinDelayUs(void)
+{
+    return Tiristor.PassMinDelayUs;
+}
+
 uint32_t Tiristor_GetCH1Counter(void)
 {
     return CH1Counter;
@@ -247,11 +263,12 @@ void Tiristor_OnZeroCross(void)
 
     /* Сигнал детектора приходит раньше реального перехода через ноль:
        угол отсчитывается от реального нуля.
-       В режиме пропускания (PassThrough) тиристор открывается сразу после
-       перехода через ноль, чтобы волна прошла без среза по углу. */
+       В режиме пропускания (PassThrough) тиристор открывается через
+       настраиваемую минимальную задержку PassMinDelayUs после нуля,
+       чтобы волна прошла без среза по углу. */
     uint32_t delay = Tiristor.ZeroCrossOffsetUs
                    + (Tiristor.PassThrough
-                      ? TIRISTOR_MIN_DELAY_US
+                      ? Tiristor.PassMinDelayUs
                       : ((halfPeriod * Device_GetAngle()) / 180U));
 
     if(delay < TIRISTOR_MIN_DELAY_US) { delay = TIRISTOR_MIN_DELAY_US; }
@@ -290,10 +307,12 @@ void Tiristor_Channel1_IRQHandler(void)
     /* Синхроимпульс для осциллографа идёт одновременно с управляющим */
     SYNC_OSC_GPIO_Port->BSRR = SYNC_OSC_Pin;
     CH1Counter++;
-    if((Tiristor.Mode == TIRISTOR_MODE_FIRST) && !Tiristor.PassThrough)
-    {
-        htim2.Instance->DIER &= ~TIM_DIER_CC1IE;
-    }
+
+    /* Гашение CC1IE по условию Mode/FastThrough удалено: обработчик только
+       выставляет выход и синхроимпульс. На каких полуволнах открывать
+       тиристор, решает device.c через PassThrough, а импульс на каждой
+       полуволне обеспечивает Tiristor_OnZeroCross, вызываемый на каждом
+       переходе через ноль. */
 }
 
 /*=============================================================

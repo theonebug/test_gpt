@@ -131,6 +131,12 @@ static const MenuItem_t MenuItems[] =
         "us",           NULL,            NULL, SETTINGS_Apply, NULL
     },
     {
+        "PASSMIN",      MENU_ITEM_UINT,  &Settings.PassMinDelayUs,
+        SETTINGS_PASS_MIN_DELAY_MIN_US, SETTINGS_PASS_MIN_DELAY_MAX_US,
+        SETTINGS_PASS_MIN_DELAY_STEP_US,
+        "us",           NULL,            NULL, SETTINGS_Apply, NULL
+    },
+    {
         "CONTROL",      MENU_ITEM_ENUM,  &Settings.ControlMode,
         0U, CONTROL_MODE_COUNT - 1U, 1U,
         NULL,           MENU_ControlNames, NULL, SETTINGS_Apply, NULL

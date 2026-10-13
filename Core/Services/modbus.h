@@ -22,6 +22,9 @@ extern "C" {
  *   8  адрес RS485
  *   9  чётность RS485
  *   10 команда: 1 - START, 2 - STOP, 3 - сохранить настройки
+ *   11 калибровка опережения детектора нуля, мкс (ZeroCrossOffsetUs)
+ *   12 минимальная задержка открытия для проходных полуволн, мкс
+ *      (PassMinDelayUs, 50...500, шаг 10; см. WORK_MODE_FIRST_WAVE)
  *
  * Input registers (0x04):
  *   0  состояние устройства
@@ -39,7 +42,7 @@ extern "C" {
  *   12 версия прошивки
  *=============================================================*/
 
-#define MODBUS_HOLDING_COUNT    12U
+#define MODBUS_HOLDING_COUNT    13U
 #define MODBUS_INPUT_COUNT      13U
 
 #define MODBUS_CMD_START        1U

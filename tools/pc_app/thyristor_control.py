@@ -22,8 +22,9 @@ HOLDING_ADDRESS = 8
 HOLDING_PARITY = 9
 HOLDING_COMMAND = 10
 HOLDING_ZC_OFFSET_US = 11
+HOLDING_PASS_MIN_DELAY_US = 12
 
-HOLDING_COUNT = 12
+HOLDING_COUNT = 13
 INPUT_COUNT = 13
 
 CMD_START = 1
@@ -273,6 +274,10 @@ class MainWindow(QtWidgets.QWidget):
         self.zc_offset_spin.setRange(0, 5000)
         self.zc_offset_spin.setSingleStep(10)
 
+        self.pass_min_spin = QtWidgets.QSpinBox()
+        self.pass_min_spin.setRange(50, 500)
+        self.pass_min_spin.setSingleStep(10)
+
         self.control_combo = QtWidgets.QComboBox()
         self.control_combo.addItems(CONTROL_MODES)
 
@@ -283,6 +288,8 @@ class MainWindow(QtWidgets.QWidget):
             ("Аварийный таймаут, с", self.max_run_spin, HOLDING_MAX_RUN_S),
             ("Допуск частоты, 0.1 Гц", self.freq_dev_spin, HOLDING_FREQ_DEV),
             ("Калибровка нуля, мкс", self.zc_offset_spin, HOLDING_ZC_OFFSET_US),
+            ("Мин. задержка проходных полуволн, мкс", self.pass_min_spin,
+             HOLDING_PASS_MIN_DELAY_US),
             ("Режим управления", self.control_combo, HOLDING_CONTROL_MODE),
         ]
 
@@ -384,6 +391,7 @@ class MainWindow(QtWidgets.QWidget):
         self.max_run_spin.setValue(values[HOLDING_MAX_RUN_S])
         self.freq_dev_spin.setValue(values[HOLDING_FREQ_DEV])
         self.zc_offset_spin.setValue(values[HOLDING_ZC_OFFSET_US])
+        self.pass_min_spin.setValue(values[HOLDING_PASS_MIN_DELAY_US])
         self.control_combo.setCurrentIndex(values[HOLDING_CONTROL_MODE])
 
     def poll(self) -> None:
