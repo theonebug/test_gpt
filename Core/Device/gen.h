@@ -30,6 +30,9 @@ uint8_t GEN_IsRunning(void);
 /* Вызывать из фонового цикла (Device_Update) для контроля времени работы */
 void GEN_Process(void);
 
+/* Обработчик прерывания TIM1 (вызывается из TIM1_UP_IRQHandler) */
+void GEN_IRQHandler(void);
+
 #ifdef __cplusplus
 }
 #endif
