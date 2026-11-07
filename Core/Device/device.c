@@ -3,6 +3,7 @@
 #include "bsp_led.h"
 #include "sync.h"
 #include "tiristor.h"
+#include "gen.h"
 #include "settings.h"
 #include "tim.h"
 
@@ -86,6 +87,7 @@ void Device_Start(void)
 void Device_Stop(void)
 {
     Tiristor_Stop();
+    GEN_Stop();
 
     Device.State = DEVICE_READY;
 }
@@ -110,16 +112,25 @@ void Device_OnZeroCross(void)
 
     if(Device.State == DEVICE_TEST)
     {
-        /* WORK_MODE_FIRST_WAVE: 1-я полуволна срезается под углом,
-           а последующие пропускаются без искажений. Тиристор запирается
-           на каждом переходе через ноль, поэтому чтобы ток шёл дальше,
-           его нужно вновь открывать сразу после нуля (PassThrough). */
-        Tiristor_SetPassThrough((Settings.WorkMode == WORK_MODE_FIRST_WAVE) &&
-                                (TestHalfWaves != 0U));
+        if(Settings.WorkMode == WORK_MODE_FIRST_WAVE)
+        {
+            if(TestHalfWaves == 0U)
+            {
+                /* 1-я полуволна: импульс по заданному углу, затем запуск
+                   генератора прямоугольных импульсов (FIRST WAVE). */
+                Tiristor_OnZeroCross();
 
-        /* Импульс подаётся на каждой полуволне; в FIRST WAVE поведение
-           зависит от PassThrough, в остальных режимах - всегда срез по углу. */
-        Tiristor_OnZeroCross();
+                /* Запускаем генератор с частотой из настроек */
+                GEN_Start(Settings.GenFreqHz);
+            }
+            /* Последующие полуволны: генератор работает автономно через TIM1,
+               тиристором управляют прерывания TIM1, Tiristor_OnZeroCross не нужен. */
+        }
+        else
+        {
+            /* Остальные режимы: импульс на каждой полуволне через TIM2 */
+            Tiristor_OnZeroCross();
+        }
 
         TestHalfWaves++;
         ZeroCrossCounter++;
@@ -171,6 +182,9 @@ static void Device_UpdateLeds(void)
 void Device_Update(void)
 {
     Device.SyncOK = SYNC_IsPresent();
+
+    /* Контроль времени работы генератора FIRST WAVE */
+    GEN_Process();
 
     /* Потеря синхронизации во время работы - аварийный стоп */
     if(!Device.SyncOK && (Device.State != DEVICE_READY))

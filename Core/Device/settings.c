@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "tiristor.h"
+#include "gen.h"
 #include "device.h"
 #include "sync.h"
 #include "modbus.h"
@@ -21,7 +22,7 @@
    состава или смысла полей: старая запись тогда отбрасывается и применяются
    значения по умолчанию.
    v4: добавлено поле PassMinDelayUs. */
-#define SETTINGS_VERSION      4U
+#define SETTINGS_VERSION      5U
 
 typedef struct
 {
@@ -105,6 +106,10 @@ static uint8_t SETTINGS_CheckRanges(const Settings_t *data)
     if(!SETTINGS_InRange(data->PassMinDelayUs,
                          SETTINGS_PASS_MIN_DELAY_MIN_US,
                          SETTINGS_PASS_MIN_DELAY_MAX_US)) { return 0U; }
+
+    if(!SETTINGS_InRange(data->GenFreqHz,
+                         SETTINGS_GEN_FREQ_MIN_HZ,
+                         SETTINGS_GEN_FREQ_MAX_HZ)) { return 0U; }
 
     return 1U;
 }
@@ -222,6 +227,7 @@ void SETTINGS_SetDefaults(void)
     Settings.FreqDeviationX10 = 20U;   /* 48.0 ... 52.0 Гц */
     Settings.ZeroCrossOffsetUs = 0U;
     Settings.PassMinDelayUs   = 50U;
+    Settings.GenFreqHz        = SETTINGS_GEN_FREQ_DEFAULT_HZ;
 }
 
 /*=============================================================
@@ -234,11 +240,10 @@ void SETTINGS_Apply(void)
     Tiristor_SetZeroCrossOffsetUs(Settings.ZeroCrossOffsetUs);
     Tiristor_SetPassMinDelayUs(Settings.PassMinDelayUs);
 
-    /* В режиме FIRST_WAVE импульс формируется на каждой полуволне:
-       1-я срезается под углом, остальные открывают тиристор через
-       PassMinDelayUs после нуля (волны проходят без искажений).
-       Этим управляет device.c + PassThrough. Mode на гашение CC1IE больше
-       не влияет (см. Tiristor_Channel1_IRQHandler), поэтому всегда ALL. */
+    /* Генератор FIRST WAVE инициализируется один раз при старте.
+       Частота применяется при пуске в Device_Start / Device_OnZeroCross. */
+    GEN_Init();
+
     Tiristor_SetMode(TIRISTOR_MODE_ALL);
 
     Device.Remote = (Settings.ControlMode == CONTROL_MODE_REMOTE) ? 1U : 0U;
