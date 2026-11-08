@@ -16,6 +16,9 @@ typedef struct
     uint16_t DelayUs;
     uint16_t PulseWidthUs;
 
+    /* Опережение сигнала детектора нуля, мкс */
+    uint16_t ZeroCrossOffsetUs;
+
 } TiristorControl_t;
 
 static TiristorControl_t Tiristor;
@@ -25,6 +28,15 @@ static TiristorControl_t Tiristor;
 
 static volatile uint32_t CH1Counter = 0;
 static volatile uint32_t CH2Counter = 0;
+
+/* Заход в OnZeroCross, когда предыдущий импульс ещё не завершён */
+static volatile uint32_t RestartCounter = 0;
+
+/* Срабатывания сторожа по CH2 (выход остался включён) */
+static volatile uint32_t WatchdogCounter = 0;
+
+/* Запас после расчётного момента выключения, мкс */
+#define TIRISTOR_WATCHDOG_US    200U
 
 /*=============================================================
  * Инициализация
@@ -42,6 +54,10 @@ void Tiristor_Init(void)
 
     HAL_GPIO_WritePin(TIRISTOR_OUT_GPIO_Port,
                       TIRISTOR_OUT_Pin,
+                      GPIO_PIN_RESET);
+
+    HAL_GPIO_WritePin(SYNC_OSC_GPIO_Port,
+                      SYNC_OSC_Pin,
                       GPIO_PIN_RESET);
 
     HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
@@ -68,6 +84,10 @@ void Tiristor_Stop(void)
 
     HAL_GPIO_WritePin(TIRISTOR_OUT_GPIO_Port,
                       TIRISTOR_OUT_Pin,
+                      GPIO_PIN_RESET);
+
+    HAL_GPIO_WritePin(SYNC_OSC_GPIO_Port,
+                      SYNC_OSC_Pin,
                       GPIO_PIN_RESET);
 }
 
@@ -110,6 +130,16 @@ uint16_t Tiristor_GetPulseWidthUs(void)
     return Tiristor.PulseWidthUs;
 }
 
+void Tiristor_SetZeroCrossOffsetUs(uint16_t offset)
+{
+    Tiristor.ZeroCrossOffsetUs = offset;
+}
+
+uint16_t Tiristor_GetZeroCrossOffsetUs(void)
+{
+    return Tiristor.ZeroCrossOffsetUs;
+}
+
 uint32_t Tiristor_GetCH1Counter(void)
 {
     return CH1Counter;
@@ -118,6 +148,70 @@ uint32_t Tiristor_GetCH1Counter(void)
 uint32_t Tiristor_GetCH2Counter(void)
 {
     return CH2Counter;
+}
+
+uint32_t Tiristor_GetRestartCounter(void)
+{
+    return RestartCounter;
+}
+
+uint32_t Tiristor_GetWatchdogCounter(void)
+{
+    return WatchdogCounter;
+}
+
+/*=============================================================
+ * Аварийное гашение выхода
+ *
+ * Без HAL и без предварительной инициализации: вызывается также из
+ * HardFault_Handler и Error_Handler.
+ *=============================================================*/
+
+void Tiristor_EmergencyOff(void)
+{
+    TIM2->CR1  &= ~TIM_CR1_CEN;
+    TIM2->DIER &= ~(TIM_DIER_CC1IE | TIM_DIER_CC2IE);
+
+    TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+    SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
+}
+
+/*=============================================================
+ * Сторож по CH2: если выключающее сравнение не отработало,
+ * выход гасится из фонового цикла. Счётчики CH1/CH2 не трогаем.
+ *=============================================================*/
+
+void Tiristor_Process(void)
+{
+    uint8_t stuck = 0U;
+
+    /* Выход не включён - контролировать нечего */
+    if((TIRISTOR_OUT_GPIO_Port->ODR & TIRISTOR_OUT_Pin) == 0U)
+    {
+        return;
+    }
+
+    if((TIM2->CR1 & TIM_CR1_CEN) == 0U)
+    {
+        /* Таймер остановлен, а выход всё ещё поднят */
+        stuck = 1U;
+    }
+    else if(TIM2->SR & TIM_SR_UIF)
+    {
+        /* TIM2 успел переполниться (65 мс) с поднятым выходом */
+        stuck = 1U;
+    }
+    else if(TIM2->CNT > (TIM2->CCR2 + TIRISTOR_WATCHDOG_US))
+    {
+        stuck = 1U;
+    }
+
+    if(stuck)
+    {
+        Tiristor_EmergencyOff();
+
+        WatchdogCounter++;
+    }
 }
 
 /*=============================================================
@@ -135,12 +229,22 @@ void Tiristor_OnZeroCross(void)
     if(halfPeriod <= (pulseWidth + TIRISTOR_GUARD_US)) { return; }
 
     uint32_t max_delay = halfPeriod - pulseWidth - TIRISTOR_GUARD_US;
-    uint32_t delay = (halfPeriod * Device_GetAngle()) / 180U;
+
+    /* Сигнал детектора приходит раньше реального перехода через ноль:
+       угол отсчитывается от реального нуля */
+    uint32_t delay = Tiristor.ZeroCrossOffsetUs
+                   + ((halfPeriod * Device_GetAngle()) / 180U);
 
     if(delay < TIRISTOR_MIN_DELAY_US) { delay = TIRISTOR_MIN_DELAY_US; }
     if(delay > max_delay)             { delay = max_delay; }
 
     Tiristor.DelayUs = (uint16_t)delay;
+
+    if(TIM2->CR1 & TIM_CR1_CEN)
+    {
+        /* Предыдущий полупериод не успел закончиться */
+        RestartCounter++;
+    }
 
     // Порядок важен: стоп -> CCR -> UG -> сброс флагов -> разрешение IRQ -> старт.
     // Запуск строго последним, иначе при малых углах сброс SR затирает уже
@@ -163,6 +267,9 @@ void Tiristor_OnZeroCross(void)
 void Tiristor_Channel1_IRQHandler(void)
 {
     TIRISTOR_OUT_GPIO_Port->BSRR = TIRISTOR_OUT_Pin;
+
+    /* Синхроимпульс для осциллографа идёт одновременно с управляющим */
+    SYNC_OSC_GPIO_Port->BSRR = SYNC_OSC_Pin;
     CH1Counter++;
     if(Tiristor.Mode == TIRISTOR_MODE_FIRST)
     {
@@ -178,6 +285,7 @@ void Tiristor_Channel2_IRQHandler(void)
 {
 
 	TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+	SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
 	TIM2->CR1 &= ~TIM_CR1_CEN;
 	CH2Counter++;
 }

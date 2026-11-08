@@ -37,6 +37,9 @@
 #include "device.h"
 #include "sync.h"
 #include "tiristor.h"
+#include "settings.h"
+#include "menu.h"
+#include "modbus.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +62,7 @@
 /* USER CODE BEGIN PV */
 //static uint16_t Angle = 90;
 
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -69,6 +73,69 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* Гашение выхода до инициализации периферии: после сброса во время
+   импульса пин не должен оставаться поднятым */
+static void TiristorOutput_SafeInit(void)
+{
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+
+  GPIO_InitTypeDef init = {0};
+
+  init.Pin   = TIRISTOR_OUT_Pin;
+  init.Mode  = GPIO_MODE_OUTPUT_PP;
+  init.Pull  = GPIO_NOPULL;
+  init.Speed = GPIO_SPEED_FREQ_HIGH;
+
+  HAL_GPIO_Init(TIRISTOR_OUT_GPIO_Port, &init);
+
+  TIRISTOR_OUT_GPIO_Port->BRR = TIRISTOR_OUT_Pin;
+
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
+
+  init.Pin = SYNC_OSC_Pin;
+
+  HAL_GPIO_Init(SYNC_OSC_GPIO_Port, &init);
+
+  SYNC_OSC_GPIO_Port->BRR = SYNC_OSC_Pin;
+}
+
+/* Сторожевой таймер на регистрах (HAL IWDG в проект не включён):
+   зависание прошивки с открытым тиристором опасно. */
+#define WATCHDOG_KEY_RELOAD   0x0000AAAAUL
+#define WATCHDOG_KEY_ENABLE   0x0000CCCCUL
+#define WATCHDOG_KEY_WRITE    0x00005555UL
+
+static void Watchdog_Init(void)
+{
+  uint32_t timeout;
+
+  /* Сначала запуск: LSI тактируется только после включения IWDG,
+     иначе биты SR никогда не сбросятся и ожидание зависнет. */
+  IWDG->KR = WATCHDOG_KEY_ENABLE;
+
+  /* LSI ~40 кГц / 32 = 1.25 кГц, 625 тиков -> ~500 мс */
+  IWDG->KR  = WATCHDOG_KEY_WRITE;
+  IWDG->PR  = IWDG_PR_PR_0 | IWDG_PR_PR_1;   /* делитель 32 */
+  IWDG->RLR = 625U;
+
+  timeout = HAL_GetTick() + 100U;
+
+  while((IWDG->SR != 0U) && (HAL_GetTick() < timeout))
+  {
+  }
+
+  IWDG->KR = WATCHDOG_KEY_RELOAD;
+}
+
+void Watchdog_Refresh(void)
+{
+  IWDG->KR = WATCHDOG_KEY_RELOAD;
+}
 
 /* USER CODE END 0 */
 
@@ -89,6 +156,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  TiristorOutput_SafeInit();
 
   /* USER CODE END Init */
 
@@ -117,6 +185,9 @@ int main(void)
   Device_Init();
   BSP_LCD_UpdateAngle(Device_GetAngle());
   Tiristor_Init();
+  SETTINGS_Init();
+  MENU_Init();
+  MODBUS_Init();
 
   // 1. Аппаратно включаем сам счетчик таймера TIM2 (устанавливаем бит CR1_CEN)
   __HAL_TIM_ENABLE(&htim2);
@@ -135,19 +206,30 @@ int main(void)
   BSP_LCD_SetScreen(LCD_SCREEN_MAIN);
   BSP_LCD_UpdateAngle(Device.Angle);
   BSP_LCD_UpdateMode(0);
-  BSP_LCD_UpdateRS485(1);
+  BSP_LCD_UpdateRS485(0);
   BSP_LCD_UpdateSync(1);
 
   BSP_LCD_UpdateStatus("READY", UI_COLOR_OK);
   BSP_LCD_UpdateDuration(250);
-  BSP_LCD_UpdateProgress(75);
+
+  /* Сторож запускаем после долгой отрисовки заставки.
+     На отладке остановка на точке не должна сбрасывать контроллер. */
+  __HAL_RCC_AFIO_CLK_ENABLE();
+  DBGMCU->CR |= DBGMCU_CR_DBG_IWDG_STOP;
+
+  Watchdog_Init();
 
   EventMessage_t msg;
   while (1)
   {
+      Watchdog_Refresh();
+
       INPUT_Update();
       SYNC_Update();
+      Tiristor_Process();
+      MODBUS_Process();
       Device_Update();
+      SETTINGS_Process();
 
       //BSP_LCD_UpdateDuration((uint16_t)Tiristor_GetTestCounter());
       //BSP_LCD_UpdateDuration((htim1.Instance->CR1 & TIM_CR1_CEN) ? 1 : 0);
@@ -156,84 +238,87 @@ int main(void)
 
       static uint32_t SyncTimer = 0;
 
-          if(HAL_GetTick() - SyncTimer >= 200)
+          if((HAL_GetTick() - SyncTimer >= 200) && !MENU_IsActive())
           {
               SyncTimer = HAL_GetTick();
 
               BSP_LCD_UpdateSync(SYNC_IsPresent());
 
+              BSP_LCD_UpdateRS485(MODBUS_IsOnline());
+
+              BSP_LCD_UpdateMode(Device.Remote);
+
               BSP_LCD_UpdateAngle(Device_GetAngle());
+
+              BSP_LCD_UpdateHeartbeat();
           }
 
-          static uint32_t PrevSync = 0;
-          static uint32_t PrevCH1  = 0;
-          static uint32_t PrevCH2  = 0;
+          static uint32_t PrevSync    = 0;
+          static uint32_t PrevGlitch  = 0;
+          static uint32_t PrevCH1     = 0;
+          static uint32_t PrevRestart = 0;
+          static uint32_t PrevWatchdog = 0;
           static uint32_t Tick = 0;
 
-          if(HAL_GetTick() - Tick >= 1000)
+          if((HAL_GetTick() - Tick >= 1000) && !MENU_IsActive())
           {
               Tick = HAL_GetTick();
-              uint32_t ds = SYNC_GetCounter() - PrevSync;
-                  uint32_t d1 = Tiristor_GetCH1Counter() - PrevCH1;
-                  uint32_t d2 = Tiristor_GetCH2Counter() - PrevCH2;
 
-                  PrevSync = SYNC_GetCounter();
-                  PrevCH1  = Tiristor_GetCH1Counter();
-                  PrevCH2  = Tiristor_GetCH2Counter();
+              uint32_t sync    = SYNC_GetCounter();
+              uint32_t glitch  = SYNC_GetGlitchCounter();
+              uint32_t ch1     = Tiristor_GetCH1Counter();
+              uint32_t restart = Tiristor_GetRestartCounter();
+              uint32_t wdog    = Tiristor_GetWatchdogCounter();
 
-                  BSP_LCD_UpdateDuration(d1);   // сначала проверяем CH1
+              BSP_LCD_UpdateDebug((uint16_t)(sync    - PrevSync),
+                                  (uint16_t)(glitch  - PrevGlitch),
+                                  (uint16_t)(ch1     - PrevCH1),
+                                  (uint16_t)(restart - PrevRestart),
+                                  (uint16_t)(wdog    - PrevWatchdog));
+
+              PrevSync    = sync;
+              PrevGlitch  = glitch;
+              PrevCH1     = ch1;
+              PrevRestart = restart;
+              PrevWatchdog = wdog;
           }
 
       while(EVENT_Get(&msg))
       {
+          /* Когда открыто меню настроек, энкодер работает на меню */
+          if(MENU_HandleEvent(&msg))
+          {
+              continue;
+          }
+
+          /* Когда устройство управляет тиристором, доступна только STOP */
+          if(!Device_IsIdle() && (msg.Id != EVENT_STOP_CLICK))
+          {
+              continue;
+          }
+
           switch(msg.Id)
           {
               case EVENT_RUN_CLICK:
-            	  //BSP_LED_Toggle(LED_READY);
-            	  Device_Start();
+                  Device_Start();
                   break;
 
               case EVENT_STOP_CLICK:
-            	  BSP_LED_Toggle(LED_ALARM);
-            	  Device_Stop();
-                  break;
-
-              case EVENT_ENCODER_CLICK:
-                  BSP_LED_Toggle(LED_PULSE);
-                  break;
-
-              case EVENT_ENCODER_LEFT:
-            	  BSP_LED_Toggle(LED_ALARM);
-            	    if(Device.Angle < 175)
-            	    {
-            	    	Device_SetAngle(Device_GetAngle() + 1);
-            	    }
-                  break;
-
-              case EVENT_ENCODER_RIGHT:
-            	  //BSP_LED_Toggle(LED_READY);
-            	    if(Device.Angle > 5)
-            	    {
-            	    	Device_SetAngle(Device_GetAngle() - 1);
-            	    }
-                  break;
-
-              case EVENT_RUN_LONG:
-                  //BSP_LED_Toggle(LED_READY);
-                  BSP_LED_Toggle(LED_ALARM);
-                  break;
-
-              case EVENT_STOP_LONG:
-                  //BSP_LED_Toggle(LED_READY);
-                  BSP_LED_Toggle(LED_PULSE);
+                  Device_Stop();
                   break;
 
               case EVENT_ENCODER_LONG:
-                  //BSP_LED_Toggle(LED_READY);
-                  BSP_LED_Toggle(LED_ALARM);
-                  BSP_LED_Toggle(LED_PULSE);
+                  /* Длительное нажатие кнопки энкодера - меню настроек */
+                  MENU_Open();
                   break;
 
+              case EVENT_ENCODER_LEFT:
+                  Device_SetAngle(Device_GetAngle() + 1);
+                  break;
+
+              case EVENT_ENCODER_RIGHT:
+                  Device_SetAngle(Device_GetAngle() - 1);
+                  break;
 
               default:
                   break;
@@ -324,6 +409,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
+  Tiristor_EmergencyOff();
   __disable_irq();
   while (1)
   {
