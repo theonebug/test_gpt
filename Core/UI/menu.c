@@ -55,6 +55,11 @@ static void MENU_FormatBaud(uint16_t value, char *buf, uint8_t size)
     snprintf(buf, size, "%lu", (unsigned long)SETTINGS_Rs485BaudTable[index]);
 }
 
+static void MENU_FormatGenFreq(uint16_t value, char *buf, uint8_t size)
+{
+    snprintf(buf, size, "%u Hz", value);
+}
+
 /*=============================================================
  * Строки перечислений
  *=============================================================*/
@@ -129,6 +134,18 @@ static const MenuItem_t MenuItems[] =
         SETTINGS_ZC_OFFSET_MIN_US, SETTINGS_ZC_OFFSET_MAX_US,
         SETTINGS_ZC_OFFSET_STEP_US,
         "us",           NULL,            NULL, SETTINGS_Apply, NULL
+    },
+    {
+        "PASSMIN",      MENU_ITEM_UINT,  &Settings.PassMinDelayUs,
+        SETTINGS_PASS_MIN_DELAY_MIN_US, SETTINGS_PASS_MIN_DELAY_MAX_US,
+        SETTINGS_PASS_MIN_DELAY_STEP_US,
+        "us",           NULL,            NULL, SETTINGS_Apply, NULL
+    },
+    {
+        "GEN FREQ",     MENU_ITEM_UINT,  &Settings.GenFreqHz,
+        SETTINGS_GEN_FREQ_MIN_HZ, SETTINGS_GEN_FREQ_MAX_HZ,
+        SETTINGS_GEN_FREQ_STEP_HZ,
+        NULL,           NULL,            MENU_FormatGenFreq, SETTINGS_Apply, NULL
     },
     {
         "CONTROL",      MENU_ITEM_ENUM,  &Settings.ControlMode,

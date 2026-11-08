@@ -1,0 +1,4 @@
+# Артефакты хост-сборки (не коммитим)
+firstwave_test.exe
+build.log
+*.o

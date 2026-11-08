@@ -51,6 +51,12 @@ uint16_t Tiristor_GetPulseWidthUs(void);
 void Tiristor_SetZeroCrossOffsetUs(uint16_t offset);
 uint16_t Tiristor_GetZeroCrossOffsetUs(void);
 
+/* Минимальная задержка открытия для проходных полуволн (PassThrough), мкс.
+   Используется вместо угла при Tiristor_SetPassThrough(1), т.е. в режиме
+   WORK_MODE_FIRST_WAVE на 2-й и последующих полуволнах. */
+void Tiristor_SetPassMinDelayUs(uint16_t delay);
+uint16_t Tiristor_GetPassMinDelayUs(void);
+
 /*=============================================================
  * Событие перехода через ноль
  *=============================================================*/

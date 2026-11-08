@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "tiristor.h"
+#include "gen.h"
 #include "device.h"
 #include "sync.h"
 #include "modbus.h"
@@ -19,8 +20,9 @@
 
 /* Версия структуры Settings_t. Увеличивать при любом изменении
    состава или смысла полей: старая запись тогда отбрасывается и применяются
-   значения по умолчанию. */
-#define SETTINGS_VERSION      3U
+   значения по умолчанию.
+   v4: добавлено поле PassMinDelayUs. */
+#define SETTINGS_VERSION      5U
 
 typedef struct
 {
@@ -100,6 +102,14 @@ static uint8_t SETTINGS_CheckRanges(const Settings_t *data)
     if(!SETTINGS_InRange(data->ZeroCrossOffsetUs,
                          SETTINGS_ZC_OFFSET_MIN_US,
                          SETTINGS_ZC_OFFSET_MAX_US))       { return 0U; }
+
+    if(!SETTINGS_InRange(data->PassMinDelayUs,
+                         SETTINGS_PASS_MIN_DELAY_MIN_US,
+                         SETTINGS_PASS_MIN_DELAY_MAX_US)) { return 0U; }
+
+    if(!SETTINGS_InRange(data->GenFreqHz,
+                         SETTINGS_GEN_FREQ_MIN_HZ,
+                         SETTINGS_GEN_FREQ_MAX_HZ)) { return 0U; }
 
     return 1U;
 }
@@ -216,6 +226,8 @@ void SETTINGS_SetDefaults(void)
     Settings.MaxRunTimeS      = 10U;
     Settings.FreqDeviationX10 = 20U;   /* 48.0 ... 52.0 Гц */
     Settings.ZeroCrossOffsetUs = 0U;
+    Settings.PassMinDelayUs   = 50U;
+    Settings.GenFreqHz        = SETTINGS_GEN_FREQ_DEFAULT_HZ;
 }
 
 /*=============================================================
@@ -226,14 +238,13 @@ void SETTINGS_Apply(void)
 {
     Tiristor_SetPulseWidthUs(Settings.PulseWidthUs);
     Tiristor_SetZeroCrossOffsetUs(Settings.ZeroCrossOffsetUs);
+    Tiristor_SetPassMinDelayUs(Settings.PassMinDelayUs);
 
-    /* В режиме FIRST_WAVE импульс формируется на каждой полуволне:
-       1-я срезается под углом, остальные открывают тиристор сразу после нуля
-       (волны проходят без искажений). Этим управляет device.c + PassThrough.
-       TIRISTOR_MODE_FIRST оставляем как страховку для первой (срезаемой) волны. */
-    Tiristor_SetMode((Settings.WorkMode == WORK_MODE_FIRST_WAVE)
-                     ? TIRISTOR_MODE_FIRST
-                     : TIRISTOR_MODE_ALL);
+    /* Генератор FIRST WAVE инициализируется один раз при старте.
+       Частота применяется при пуске в Device_Start / Device_OnZeroCross. */
+    GEN_Init();
+
+    Tiristor_SetMode(TIRISTOR_MODE_ALL);
 
     Device.Remote = (Settings.ControlMode == CONTROL_MODE_REMOTE) ? 1U : 0U;
 
