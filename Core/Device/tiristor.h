@@ -32,6 +32,12 @@ uint8_t Tiristor_IsActive(void);
 void Tiristor_SetMode(TiristorMode_t mode);
 TiristorMode_t Tiristor_GetMode(void);
 
+/* Режим "пропускание полуволны": тиристор открывается сразу после перехода
+   через ноль (без среза по углу), т.е. волна проходит без искажений.
+   Используется FIRST WAVE для 2-й и следующих полуволн. */
+void Tiristor_SetPassThrough(uint8_t pass);
+uint8_t Tiristor_GetPassThrough(void);
+
 /*=============================================================
  * Параметры
  *=============================================================*/
