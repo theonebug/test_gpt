@@ -116,9 +116,19 @@ void Device_OnZeroCross(void)
         {
             if(TestHalfWaves == 0U)
             {
-                /* 1-я полуволна: НЕ выдаём импульс по углу,
-                   сразу запускаем генератор прямоугольных импульсов (FIRST WAVE). */
-                GEN_Start(Settings.GenFreqHz);
+                /* 1-я полуволна: выдерживаем задержку по углу отсечки,
+                   затем запускаем генератор прямоугольных импульсов.
+                   Импульс тиристора по углу не выдаём. */
+                uint32_t halfPeriod = SYNC_GetHalfPeriodUs();
+                uint32_t angle      = Device_GetAngle();
+
+                /* delay_us = (угол / 180) × halfPeriod_us + калибровка нуля */
+                uint32_t delayUs = (halfPeriod * angle) / 180U
+                                 + Settings.ZeroCrossOffsetUs;
+
+                if(delayUs > 65000U) { delayUs = 65000U; }
+
+                GEN_StartDelayed((uint16_t)delayUs, Settings.GenFreqHz);
             }
             /* Последующие полуволны: генератор работает автономно через TIM1,
                тиристором управляют прерывания TIM1. */

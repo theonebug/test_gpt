@@ -21,6 +21,11 @@ void GEN_Init(void);
    Импульс ~50% от периода, выводится на TIRISTOR_OUT. */
 void GEN_Start(uint16_t freqHz);
 
+/* Запуск генератора с задержкой delayUs мкс после вызова.
+   По истечении задержки начинает generarцию с частотой freqHz.
+   Используется в FIRST WAVE для выдержки угла отсечки. */
+void GEN_StartDelayed(uint16_t delayUs, uint16_t freqHz);
+
 /* Остановка генератора и сброс вывода в 0 */
 void GEN_Stop(void);
 
