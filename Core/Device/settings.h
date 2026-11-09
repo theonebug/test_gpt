@@ -85,7 +85,7 @@ typedef enum
 
 /* Частота генератора импульсов FIRST WAVE, Гц */
 #define SETTINGS_GEN_FREQ_MIN_HZ        50U
-#define SETTINGS_GEN_FREQ_MAX_HZ        1000U
+#define SETTINGS_GEN_FREQ_MAX_HZ        10000U
 #define SETTINGS_GEN_FREQ_STEP_HZ       10U
 #define SETTINGS_GEN_FREQ_DEFAULT_HZ    360U
 

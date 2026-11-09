@@ -63,7 +63,7 @@ void GEN_Start(uint16_t freqHz)
        Период между переключениями = 1 000 000 / (2*freq) мкс */
     uint32_t periodUs = 1000000UL / (2UL * (uint32_t)freqHz);
 
-    if(periodUs < 100U) { periodUs = 100U; }   /* ограничение: max 5 кГц */
+    if(periodUs < 40U) { periodUs = 40U; }    /* ограничение: max ~12.5 кГц */
     if(periodUs > 10000U) { periodUs = 10000U; }/* ограничение: min 50 Гц */
 
     TIM1->ARR = periodUs - 1U;
@@ -75,6 +75,7 @@ void GEN_Start(uint16_t freqHz)
     TIM1->CR1 |= TIM_CR1_CEN;      /* запуск счётчика */
 
     GenRunning = 1U;
+    GenInDelay = 0U;               /* сразу генерация, без выдержки */
     GenStartTick = HAL_GetTick();
     GenDurationMs = Settings.DurationMs;
 }
@@ -181,7 +182,7 @@ void GEN_IRQHandler(void)
                    Период между переключениями = 1 000 000 / (2*freq) мкс */
                 uint32_t periodUs = 1000000UL / (2UL * (uint32_t)GenFreqTarget);
 
-                if(periodUs < 100U) { periodUs = 100U; }   /* ограничение: max 5 кГц */
+                if(periodUs < 40U) { periodUs = 40U; }    /* ограничение: max ~12.5 кГц */
                 if(periodUs > 10000U) { periodUs = 10000U; }/* ограничение: min 50 Гц */
 
                 TIM1->ARR = periodUs - 1U;
@@ -189,8 +190,8 @@ void GEN_IRQHandler(void)
                 TIM1->EGR = TIM_EGR_UG;
                 TIM1->SR = ~TIM_SR_UIF;
 
-                /* Начальное состояние: выход в 0 */
-                HAL_GPIO_WritePin(TIRISTOR_OUT_GPIO_Port, TIRISTOR_OUT_Pin, GPIO_PIN_RESET);
+                /* Первый фронт ровно в точке отсечки — поднимаем пин */
+                HAL_GPIO_WritePin(TIRISTOR_OUT_GPIO_Port, TIRISTOR_OUT_Pin, GPIO_PIN_SET);
             }
         }
         else
